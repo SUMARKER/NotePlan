@@ -65,6 +65,13 @@
   // 中国大陆法定节假日（js/cn-holidays.js）：{name, off} | null
   const holOf = (dateStr) => (window.CNHolidays ? window.CNHolidays.info(dateStr) : null);
   const holTitle = (dateStr) => (window.CNHolidays ? window.CNHolidays.titleSuffix(dateStr) : '');
+  // 农历 / 节气（js/lunar.js）
+  const lunarLabel = (y, m, d) => (window.NPLunar ? window.NPLunar.label(y, m, d) : null);
+  const lunarFull = (y, m, d) => (window.NPLunar ? window.NPLunar.fullText(y, m, d) : '');
+  const lunarFullOf = (dateStr) => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return lunarFull(y, m, d);
+  };
   // 缺数据的年份后台自动拉取（jsDelivr / GitHub 上的 holiday-cn），成功后刷新日历视图
   function ensureHolYears(years) {
     if (!window.CNHolidays || !window.CNHolidays.ensureYear) return;
@@ -222,15 +229,15 @@
     const grid = $('#cal-grid');
     grid.innerHTML = '';
 
-    for (const [wi, w] of ['一', '二', '三', '四', '五', '六', '日'].entries()) {
+    for (const [wi, w] of ['日', '一', '二', '三', '四', '五', '六'].entries()) {
       const wd = document.createElement('div');
-      wd.className = 'cal-weekday' + (wi >= 5 ? ' wk-end' : '');
+      wd.className = 'cal-weekday' + ((wi === 0 || wi === 6) ? ' wk-end' : '');
       wd.textContent = w;
       grid.appendChild(wd);
     }
 
     const first = new Date(y, m, 1);
-    const offset = (first.getDay() + 6) % 7; // 周一开头
+    const offset = first.getDay(); // 周日开头
     const daysInMonth = new Date(y, m + 1, 0).getDate();
     const today = todayStr();
     const selected = state.current && state.current.dateStr;
@@ -253,7 +260,7 @@
         tag.textContent = hol.off ? '休' : '班';
         e.appendChild(tag);
       }
-      e.title = ds + weekdayCN(ds) + holTitle(ds);
+      e.title = ds + weekdayCN(ds) + holTitle(ds) + (lunarFull(y, m + 1, d) ? ' · ' + lunarFull(y, m + 1, d) : '');
       if (ds === today) e.classList.add('today');
       if (selected === ds) e.classList.add('selected');
       if (dayHasContent(ds)) {
@@ -420,7 +427,11 @@
 
   async function openNote(rel, opts) {
     opts = opts || {};
-    if (state.current && state.current.rel === rel && !opts.force) return;
+    // 任务面板 / 周计划 / 时间轴等入口：从其它主视图切回笔记，保证编辑器可见
+    if (state.mainView !== 'notes') setMainView('notes');
+    const same = state.current && state.current.rel === rel;
+    if (same && opts.line != null) { jumpToLine(opts.line); return; }  // 已打开：只跳到目标行
+    if (same && !opts.force) return;
 
     if (saveTimerPending()) saveNow();
     const res = await window.api.readNote(rel);
@@ -1045,6 +1056,26 @@
     }
   }
 
+  /* ---- 任务分组折叠（已完成的任务默认折叠，状态存 localStorage）---- */
+
+  const TASK_GROUP_KEY = 'np.taskGroups.collapsed';
+  let taskGroupsCollapsed = null;
+
+  function taskGroupCollapsed(label) {
+    if (taskGroupsCollapsed === null) {
+      try { taskGroupsCollapsed = JSON.parse(localStorage.getItem(TASK_GROUP_KEY) || '{}'); }
+      catch (_) { taskGroupsCollapsed = {}; }
+      if (!taskGroupsCollapsed || typeof taskGroupsCollapsed !== 'object') taskGroupsCollapsed = {};
+    }
+    if (label in taskGroupsCollapsed) return !!taskGroupsCollapsed[label];
+    return label === '已完成'; // 默认：已完成折叠，其余展开
+  }
+  function toggleTaskGroup(label) {
+    if (taskGroupsCollapsed === null) taskGroupCollapsed(label);
+    taskGroupsCollapsed[label] = !taskGroupCollapsed(label); // 以含默认值的判定为准
+    try { localStorage.setItem(TASK_GROUP_KEY, JSON.stringify(taskGroupsCollapsed)); } catch (_) { /* 忽略 */ }
+  }
+
   function renderTasksPanel() {
     const box = $('#rb-tasks');
     box.innerHTML = '';
@@ -1066,10 +1097,14 @@
     for (const g of groups) {
       if (!g.items.length) continue;
       any = true;
+      const collapsed = taskGroupCollapsed(g.label);
       const h = document.createElement('div');
-      h.className = 'rt-group';
-      h.textContent = `${g.label} · ${g.items.length}`;
+      h.className = 'rt-group' + (collapsed ? ' collapsed' : '');
+      h.innerHTML = `<span class="rt-arrow">${collapsed ? '▸' : '▾'}</span>${g.label} · ${g.items.length}`;
+      h.title = collapsed ? '点击展开' : '点击折叠';
+      h.onclick = () => { toggleTaskGroup(g.label); renderTasksPanel(); };
       box.appendChild(h);
+      if (collapsed) continue;
       for (const t of g.items) {
         const el = document.createElement('div');
         el.className = 'task-item' + (t.done ? ' done' : '');
@@ -1572,17 +1607,15 @@
     const grid = document.createElement('div');
     grid.className = 'mv-grid';
 
-    for (const [wi, w] of ['周一', '周二', '周三', '周四', '周五', '周六', '周日'].entries()) {
+    for (const [wi, w] of ['周日', '周一', '周二', '周三', '周四', '周五', '周六'].entries()) {
       const wd = document.createElement('div');
-      wd.className = 'mv-weekday' + (wi >= 5 ? ' wk-end' : '');
+      wd.className = 'mv-weekday' + ((wi === 0 || wi === 6) ? ' wk-end' : '');
       wd.textContent = w;
       grid.appendChild(wd);
     }
 
     const first = new Date(y, m, 1);
-    const offset = first.getDay(); // 0=周日
-    // 第一列从本周一开始：偏移调整
-    const lead = (offset + 6) % 7;
+    const lead = first.getDay(); // 周日开头
     const start = new Date(y, m, 1 - lead);
     const today = todayStr();
     const sel = state.calvSel;
@@ -1605,14 +1638,23 @@
         (hol && !hol.off ? '<span class="mv-hol work" title="调休上班">班</span>' : '') +
         (dayHasContent(ds) ? '<span class="mv-note">📝</span>' : '');
       cell.appendChild(head);
+      // 日期说明行：法定节假日名 > 农历节日 > 节气 > 农历日
+      const lunar = lunarLabel(d.getFullYear(), d.getMonth() + 1, d.getDate());
       if (hol && hol.off) {
         const name = document.createElement('div');
         name.className = 'mv-hol';
         name.textContent = hol.name;
         name.title = hol.name;
         cell.appendChild(name);
+      } else if (lunar) {
+        const sub = document.createElement('div');
+        sub.className = 'mv-sub ' + lunar.kind;
+        sub.textContent = lunar.text;
+        sub.title = lunarFull(d.getFullYear(), d.getMonth() + 1, d.getDate());
+        cell.appendChild(sub);
       }
-      if (hol) cell.title = hol.name + (hol.off ? '' : '（调休上班）');
+      cell.title = ds + weekdayCN(ds) + holTitle(ds) +
+        (lunarFull(d.getFullYear(), d.getMonth() + 1, d.getDate()) ? ' · ' + lunarFull(d.getFullYear(), d.getMonth() + 1, d.getDate()) : '');
 
       const items = document.createElement('div');
       items.className = 'mv-items';
@@ -1703,7 +1745,9 @@
     allday.innerHTML = '';
     grid.innerHTML = '';
     grid.style.height = (TL_END_H - TL_START_H + 1) * TL_HOUR_PX + 'px';
-    $('#tl-title').textContent = `${monthCN(ds)} ${weekdayCN(ds)}${holTitle(ds)}`;
+    const [tlY, tlM, tlD] = ds.split('-').map(Number);
+    $('#tl-title').textContent = `${monthCN(ds)} ${weekdayCN(ds)}${holTitle(ds)}` +
+      (lunarFull(tlY, tlM, tlD) ? ' · ' + lunarFull(tlY, tlM, tlD) : '');
 
     const evs = events.filter((e) => e.date === ds);
     for (const e of evs.filter((e) => e.allDay)) {
@@ -1828,14 +1872,14 @@
 
         const g = document.createElement('div');
         g.className = 'yr-grid7';
-        for (const [wi, w] of ['一', '二', '三', '四', '五', '六', '日'].entries()) {
+        for (const [wi, w] of ['日', '一', '二', '三', '四', '五', '六'].entries()) {
           const wd = document.createElement('span');
-          wd.className = 'yr-wd' + (wi >= 5 ? ' wk-end' : '');
+          wd.className = 'yr-wd' + ((wi === 0 || wi === 6) ? ' wk-end' : '');
           wd.textContent = w;
           g.appendChild(wd);
         }
         const first = new Date(y, m, 1);
-        const lead = (first.getDay() + 6) % 7;
+        const lead = first.getDay();
         for (let i = 0; i < lead; i++) g.appendChild(document.createElement('span'));
         const days = new Date(y, m + 1, 0).getDate();
         const today = todayStr();
@@ -1848,7 +1892,9 @@
           s.className = 'yr-day' + (ds === today ? ' today' : '') + (has ? ' has-note' : '') +
             (evc ? ' has-ev' : '') + (hol && hol.off ? ' holiday' : '');
           s.textContent = d;
-          s.title = ds + holTitle(ds) + (has ? ' · 有笔记' : '') + (evc ? ` · ${evc} 个事件` : '');
+          s.title = ds + holTitle(ds) +
+            (lunarFull(y, m + 1, d) ? ' · ' + lunarFull(y, m + 1, d) : '') +
+            (has ? ' · 有笔记' : '') + (evc ? ` · ${evc} 个事件` : '');
           s.onclick = () => {
             state.calvMonth = new Date(y, m, 1);
             state.calvSel = ds;

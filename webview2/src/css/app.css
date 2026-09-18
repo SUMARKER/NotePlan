@@ -879,6 +879,11 @@ html[data-theme='dark'] .tl-allday-item { color: #c084fc; }
   background: #a855f7;
 }
 
+/* 任务总览：分组可折叠 */
+.rt-group { cursor: pointer; user-select: none; }
+.rt-group:hover { color: var(--text); }
+.rt-group .rt-arrow { display: inline-block; width: 11px; color: var(--text-faint); }
+
 /* 设置里的日历列表 */
 .cal-list { display: flex; flex-direction: column; gap: 5px; }
 .cal-empty { font-size: 11.5px; color: var(--text-faint); }
@@ -1676,6 +1681,20 @@ html[data-theme='dark'] .cm-md-hl { background: rgba(245, 200, 0, 0.28); }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* 农历 / 节气说明行 */
+.mv-sub {
+  font-size: 10px;
+  line-height: 1.3;
+  color: var(--text-faint);
+  margin-top: -1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mv-sub.lunar-month { color: var(--text-dim); }
+.mv-sub.term { color: #189a52; font-weight: 600; }
+html[data-theme='dark'] .mv-sub.term { color: #3fce8a; }
+.mv-sub.festival { color: var(--danger); font-weight: 600; }
 .mv-hol.work {
   font-size: 9.5px;
   font-weight: 600;
