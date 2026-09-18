@@ -112,6 +112,7 @@ jobs:
         working-directory: webview2
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force -Path 'dist' | Out-Null
           $makensis = (Get-ChildItem 'C:\Program Files*\NSIS\makensis.exe' -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
           if (-not $makensis) { Write-Error 'makensis.exe 未找到（NSIS 安装失败？）'; exit 1 }
           & $makensis setup.nsi
