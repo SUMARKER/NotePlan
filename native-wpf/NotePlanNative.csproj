@@ -9,7 +9,7 @@
     <RootNamespace>NotePlanNative</RootNamespace>
     <AssemblyName>NotePlanNative</AssemblyName>
     <ApplicationIcon>assets\icon.ico</ApplicationIcon>
-    <Version>0.1.0-preview</Version>
+    <Version>0.2.0-preview</Version>
     <Product>NotePlan for Windows (Native Preview)</Product>
   </PropertyGroup>
 

@@ -235,6 +235,26 @@ et8.0-windowsNotePlanNative.exe
 
 > 方案 B（WebView2 + .NET）已停止更新：不参与 CI 打包与前端同步，代码冻结保留仅供参考。
 
+### 版本规范（SemVer）
+
+每次提交按**修改范围**更新版本号（9 处配置统一由脚本修改）：
+
+| 修改范围 | 版本位 | 示例 |
+| --- | --- | --- |
+| Bug 修复、文案与样式微调，无新功能 | `0.1.0 → 0.1.1`（patch） | 修复周条角标时序问题 |
+| 新功能、界面/交互变化 | `0.1.1 → 0.2.0`（minor） | 新增农历节气、右键生成待办 |
+| 破坏性变更（数据格式、语法、快捷键不兼容） | `0.2.0 → 1.0.0`（major） | 更改笔记库目录结构 |
+
+操作：
+
+```bat
+node scripts\bump-version.js 0.2.1     :: 升版本（同步 9 处配置）
+git commit -am "..."                   :: 提交
+git tag v0.2.1 && git push origin main --tags   :: 推送后 CI 自动发布该版本 Release
+```
+
+未打标签的 main 提交只构建不出 Release；安装包请从 Releases 页或 Actions Artifacts 获取。
+
 本地一键打包（Electron + Tauri，含国内镜像与工作区外输出目录，避免 asar 被索引器锁定）：
 
 ```bat

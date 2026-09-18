@@ -6,7 +6,7 @@ ManifestDPIAware true
 
 !define APPNAME "NotePlan for Windows"
 !define COMPANY "NotePlanWpf contributors"
-!define VERSION "0.1.0"
+!define VERSION "0.2.0"
 !define EXENAME "NotePlan for Windows.exe"
 !define UNKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\NotePlanWpf"
 !define WEBVIEW2_KEY "SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
