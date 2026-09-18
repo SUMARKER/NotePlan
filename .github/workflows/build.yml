@@ -110,7 +110,11 @@ jobs:
 
       - name: 生成安装包
         working-directory: webview2
-        run: makensis setup.nsi
+        shell: pwsh
+        run: |
+          $makensis = (Get-ChildItem 'C:\Program Files*\NSIS\makensis.exe' -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+          if (-not $makensis) { Write-Error 'makensis.exe 未找到（NSIS 安装失败？）'; exit 1 }
+          & $makensis setup.nsi
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
