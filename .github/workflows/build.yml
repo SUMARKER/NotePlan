@@ -82,56 +82,14 @@ jobs:
           if-no-files-found: error
 
   # ---------------------------------------------------------------- WebView2
-  webview2:
-    name: WebView2 打包（方案 B）
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: 发布自包含单文件
-        working-directory: webview2
-        run: >
-          dotnet publish NotePlanWpf.csproj -c Release -r win-x64
-          --self-contained true -p:PublishSingleFile=true
-          -p:IncludeNativeLibrariesForSelfExtract=true
-          -p:EnableCompressionInSingleFile=true
-          -o publish-selfcontained
-
-      - name: 压缩免安装版
-        working-directory: webview2
-        run: Compress-Archive -Path 'publish-selfcontained/*' -DestinationPath 'NotePlan-Windows-webview2-portable.zip' -Force
-
-      - name: 安装 NSIS
-        run: choco install nsis -y --no-progress
-
-      - name: 生成安装包
-        working-directory: webview2
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path 'dist' | Out-Null
-          $makensis = (Get-ChildItem 'C:\Program Files*\NSIS\makensis.exe' -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
-          if (-not $makensis) { Write-Error 'makensis.exe 未找到（NSIS 安装失败？）'; exit 1 }
-          & $makensis setup.nsi
-
-      - name: 上传产物
-        uses: actions/upload-artifact@v4
-        with:
-          name: webview2-installer
-          path: |
-            webview2/dist/*.exe
-            webview2/NotePlan-Windows-webview2-portable.zip
-          if-no-files-found: error
-
+  # 方案 B（WebView2 + .NET）已停止更新：不再参与 CI 打包与前端同步，
+  # 代码冻结保留在 webview2/ 目录仅供参考，构建方法见 README。
   # ----------------------------------------------------------------- Release
-  # 推送 v* 标签时，把三个安装包发布为 GitHub Release
+  # 推送 v* 标签时，把安装包发布为 GitHub Release
   release:
     name: 发布 Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [electron, tauri, webview2]
+    needs: [electron, tauri]
     runs-on: ubuntu-latest
     permissions:
       contents: write

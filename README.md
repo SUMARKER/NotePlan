@@ -90,7 +90,7 @@ cargo tauri build   :: 产出 NSIS 安装包
 ```
 NotePlan/
 ├── electron/    方案 A：Electron 实现（main.js / preload.js / src / dist）
-├── webview2/    方案 B：WebView2 + .NET 8 WPF 宿主（csproj / setup.nsi / src / dist）
+├── webview2/    方案 B：WebView2 + .NET 8 WPF 宿主（已停止更新，冻结保留）
 ├── tauri/       方案 C：Tauri v2 实现（Rust 后端 + 复用 electron/src 前端）
 ├── native-wpf/  方案 D（实验）：WPF + AvalonEdit 原生预览版
 ├── scripts/     开发与测试工具（CDP 驱动的端到端测试等，各版通用）
@@ -229,9 +229,11 @@ et8.0-windowsNotePlanNative.exe
 
 仓库内置 `.github/workflows/build.yml`：
 
-- **推送到 `main`**：自动构建三个方案（Electron / Tauri / WebView2），安装包在构建页 Artifacts 下载；
-- **推送 `v*` 标签**（`git tag v0.1.0 && git push origin v0.1.0`）：构建后把三个安装包自动发布为 GitHub Release；
+- **推送到 `main`**：自动构建 Electron 与 Tauri 两个方案，安装包在构建页 Artifacts 下载；
+- **推送 `v*` 标签**（`git tag v0.1.0 && git push origin v0.1.0`）：构建后把两个安装包自动发布为 GitHub Release；
 - **Actions 页面手动触发**：workflow_dispatch 同效。
+
+> 方案 B（WebView2 + .NET）已停止更新：不参与 CI 打包与前端同步，代码冻结保留仅供参考。
 
 本地打包命令见下（GitHub Actions 也可手动触发）。
 
@@ -247,7 +249,10 @@ npm run dist
 - `NotePlan-for-Windows-Setup-0.1.0.exe` — NSIS 安装包（约 77 MB，安装后约 270 MB，x64）
 - `win-unpacked/` — 免安装目录
 
-### 方案 B：WebView2 + .NET（在 webview2/ 下）
+### 方案 B：WebView2 + .NET（已停止更新）
+
+> **⚠ 此方案已停止更新**：不再参与 CI 打包与前端功能同步，代码冻结保留仅供参考
+> （功能停留在与 Electron/Tauri 同步的最后版本）。构建方法如下，仍可自行编译。
 
 ```bat
 cd webview2NotePlanWpf
@@ -301,7 +306,7 @@ NotePlan/
 │   ├── package.json        含 electron-builder 打包配置
 │   ├── src/                界面 + 编辑器 + 渲染器（与本目录 assets/ 配套）
 │   └── dist/               安装包输出
-├── webview2/               方案 B：WebView2 + .NET 8 WPF 宿主（独立文件夹）
+├── webview2/               方案 B：WebView2 + .NET 8 WPF 宿主（已停止更新，冻结保留）
 │   ├── NotePlanWpf.csproj  net8.0-windows + Microsoft.Web.WebView2
 │   ├── MainWindow.xaml(.cs) 原生菜单 + WebView2 + JSON 消息分发 + 文件监听 + vault 文件服务
 │   ├── AppServices.cs      文件库/搜索/任务/标签（Electron main.js 的 C# 移植）
