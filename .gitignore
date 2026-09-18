@@ -1,0 +1,45 @@
+# 依赖
+node_modules/
+
+# 构建产物
+electron/dist/
+electron/dist2/
+webview2/dist/
+webview2/bin/
+webview2/obj/
+webview2/publish-framework/
+webview2/publish-selfcontained/
+native/
+
+# Tauri
+tauri/src-tauri/target/
+tauri/src-tauri/gen/
+tauri/.tools/
+tauri/.test-vault/
+
+# 日志与临时文件
+*.log
+*.tmp
+build-out.txt
+build-err.txt
+app-out.txt
+app-err.txt
+nsis-out.txt
+pub-out.txt
+pub-err.txt
+ts-out.txt
+tf-out.txt
+tf-err.txt
+tf2-out.txt
+tf2-err.txt
+tf3-out.txt
+tf3-err.txt
+np-host.log
+
+# 本地截图 / 临时产物
+/native-shot.png
+/shot.png
+
+# 系统文件
+.DS_Store
+Thumbs.db

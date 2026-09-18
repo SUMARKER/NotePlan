@@ -1,0 +1,64 @@
+{
+  "name": "noteplan-windows",
+  "productName": "NotePlan for Windows",
+  "version": "0.1.0",
+  "description": "受 NotePlan 启发的 Windows 桌面笔记应用：每日笔记、Markdown、任务、双链、命令面板",
+  "main": "main.js",
+  "author": "NotePlan for Windows contributors",
+  "license": "MIT",
+  "scripts": {
+    "build": "node build.js",
+    "dist": "electron-builder --win",
+    "start": "electron ."
+  },
+  "build": {
+    "appId": "com.noteplan.windows",
+    "productName": "NotePlan for Windows",
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "!src/editor-src/**",
+      "assets/icon.png",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "NotePlan-for-Windows-Setup-${version}.${ext}",
+      "shortcutName": "NotePlan for Windows",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "uninstallDisplayName": "NotePlan for Windows ${version}"
+    }
+  },
+  "devDependencies": {
+    "@codemirror/autocomplete": "^6.18.0",
+    "@codemirror/commands": "^6.7.0",
+    "@codemirror/lang-markdown": "^6.3.0",
+    "@codemirror/language": "^6.10.0",
+    "@codemirror/search": "^6.5.0",
+    "@codemirror/state": "^6.4.1",
+    "@codemirror/view": "^6.34.0",
+    "@lezer/highlight": "^1.2.0",
+    "electron": "^33.2.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.24.0"
+  }
+}
