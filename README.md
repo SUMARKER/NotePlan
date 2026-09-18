@@ -235,6 +235,12 @@ et8.0-windowsNotePlanNative.exe
 
 > 方案 B（WebView2 + .NET）已停止更新：不参与 CI 打包与前端同步，代码冻结保留仅供参考。
 
+本地一键打包（Electron + Tauri，含国内镜像与工作区外输出目录，避免 asar 被索引器锁定）：
+
+```bat
+scripts\local-pack.bat
+```
+
 本地打包命令见下（GitHub Actions 也可手动触发）。
 
 ### 方案 A：Electron（在 electron/ 下）
