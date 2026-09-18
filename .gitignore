@@ -43,3 +43,5 @@ np-host.log
 # 绯荤粺鏂囦欢
 .DS_Store
 Thumbs.db
+ "# cmd 误生成的重定向文件" 
+ "$null" 
