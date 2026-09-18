@@ -783,62 +783,6 @@ html[data-theme='dark'] .mv-chip.ev.ev-c2 { color: #fb923c; }
 html[data-theme='dark'] .mv-chip.ev.ev-c3 { color: #38bdf8; }
 .mv-more { font-size: 10.5px; color: var(--text-faint); }
 
-/* 日时间轴 */
-#calv-side {
-  width: 260px;
-  min-width: 260px;
-  border-left: 1px solid var(--border);
-  padding: 10px 12px;
-  overflow-y: auto;
-  background: var(--bg-panel);
-}
-.tl-title { font-weight: 700; font-size: 13.5px; margin-bottom: 8px; }
-.tl-allday-item {
-  font-size: 11.5px;
-  border-radius: 6px;
-  padding: 2px 7px;
-  margin-bottom: 4px;
-  background: rgba(168, 85, 247, 0.12);
-  color: #7c3aed;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-html[data-theme='dark'] .tl-allday-item { color: #c084fc; }
-#tl-grid-wrap { margin-top: 8px; position: relative; }
-#tl-grid { position: relative; }
-.tl-row { position: absolute; left: 0; right: 0; height: 44px; display: flex; }
-.tl-label { width: 42px; font-size: 10.5px; color: var(--text-faint); transform: translateY(-6px); }
-.tl-line { flex: 1; border-top: 1px solid var(--border); margin-top: 0; height: 44px; box-sizing: border-box; }
-.tl-block {
-  position: absolute;
-  left: 48px;
-  right: 8px;
-  border-radius: 7px;
-  padding: 2px 8px;
-  font-size: 11px;
-  overflow: hidden;
-  cursor: pointer;
-  z-index: 2;
-}
-.tl-block .tb-time { font-weight: 700; font-size: 10px; opacity: 0.85; }
-.tl-block .tb-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tl-block.tk { background: var(--accent); color: #fff; cursor: grab; }
-.tl-block.ev { background: rgba(168, 85, 247, 0.85); color: #fff; cursor: default; }
-.tl-block.ev.ev-c1 { background: rgba(34, 197, 94, 0.8); }
-.tl-block.ev.ev-c2 { background: rgba(249, 115, 22, 0.8); }
-.tl-block.ev.ev-c3 { background: rgba(14, 165, 233, 0.8); }
-#tl-grid.drop::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border: 2px dashed var(--accent);
-  border-radius: 10px;
-  background: var(--accent-soft);
-  pointer-events: none;
-  z-index: 1;
-}
-
 /* 年视图 */
 #calv-main.year-mode { padding: 16px 20px; }
 .yr-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
@@ -847,6 +791,8 @@ html[data-theme='dark'] .tl-allday-item { color: #c084fc; }
 .yr-mtitle:hover { color: var(--accent); }
 .yr-grid7 { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
 .yr-wd { font-size: 9.5px; color: var(--text-faint); text-align: center; }
+.yr-day.has-task { color: var(--accent); font-weight: 600; }
+.yr-day.has-task.today { color: #fff; }
 .yr-day {
   position: relative;
   font-size: 10.5px;
@@ -1627,6 +1573,13 @@ html[data-theme='dark'] .cm-md-hl { background: rgba(245, 200, 0, 0.28); }
 .wp-add input:focus { border-color: var(--accent); border-style: solid; background: var(--bg-input); }
 .wp-add input::placeholder { color: var(--text-faint); }
 .wp-day.drop { border-color: var(--accent); background: var(--accent-soft); }
+.wp-goal-date { cursor: pointer; }
+.wp-goal-date:hover { text-decoration: underline; }
+.wp-day.flash { animation: wp-flash 1.3s ease; }
+@keyframes wp-flash {
+  0%, 55% { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft-2); }
+  100% { }
+}
 
 /* ==========================================================================
    中国大陆法定节假日（数据：js/cn-holidays.js）

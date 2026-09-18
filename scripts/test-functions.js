@@ -226,13 +226,13 @@ function check(name, ok, detail) {
   })`);
   check('月视图渲染 42 格', s16.cells === 42 && s16.calviewVisible, s16.cells);
   check('月视图显示日历事件', s16.evChips.length >= 1, s16.evChips.slice(0, 3));
-  // 选中 9/16（有时间事件的一天），检查时间轴块
+  // 选中 9/16，检查月历不再包含分时视图（时间轴已按需求移除）
   evalInPage(`(() => { const c = document.querySelector('.mv-cell[data-date="2026-09-16"]'); if (c) c.click(); })()`);
   await new Promise((r) => setTimeout(r, 400));
   const s16b = evalInPage(`({
-    blocks: [...document.querySelectorAll('#tl-grid .tl-block')].map(b => b.textContent.trim().slice(0, 20)),
+    calvSideGone: !document.getElementById('calv-side') && !document.getElementById('tl-grid'),
   })`);
-  check('时间轴渲染事件块', s16b.blocks.length >= 1, s16b.blocks);
+  check('月历不再包含分时视图', s16b.calvSideGone, s16b);
   evalInPage(`document.querySelector('#main-seg button[data-main=notes]').click()`);
   evalInPage(`window.api.setSettings({calendars:[]})`);
   evalInPage(`window.api.trashNote('test-cal.ics')`);

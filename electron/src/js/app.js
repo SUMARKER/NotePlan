@@ -1455,6 +1455,17 @@
           const chip = document.createElement('span');
           chip.className = 'wp-goal-date';
           chip.textContent = `📅 ${sched.slice(5)}`;
+          chip.title = '已排期；点击定位到该日期列';
+          chip.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const col = document.querySelector(`.wp-day[data-date="${sched}"]`);
+            if (!col) { toast(`「${sched}」不在本周，用上方“下一周”切换后可见`); return; }
+            col.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+            col.classList.remove('flash');
+            void col.offsetWidth; // 重新触发动画
+            col.classList.add('flash');
+            setTimeout(() => col.classList.remove('flash'), 1300);
+          });
           txt.appendChild(chip);
         }
         txt.title = '双击编辑';
@@ -1595,7 +1606,6 @@
     const events = await loadCalEvents(rs, re);
     if (state.mainView !== 'month') return; // 异步期间切走
     renderMonthGrid(y, m, events);
-    renderTimeline(state.calvSel || todayStr(), events);
   }
 
   const EV_COLORS = ['ev-c0', 'ev-c1', 'ev-c2', 'ev-c3'];
@@ -1696,7 +1706,6 @@
       cell.onclick = () => {
         state.calvSel = ds;
         renderMonthGrid(y, m, events);
-        renderTimeline(ds, events);
       };
       cell.ondblclick = () => openDaily(ds);
       cell.addEventListener('dragover', (ev) => { ev.preventDefault(); cell.classList.add('drop'); });
@@ -1733,111 +1742,6 @@
       ev.dataTransfer.setData('text/np-task', JSON.stringify({ rel: task.rel, line: task.line, start: task.start, end: task.end }));
       ev.dataTransfer.effectAllowed = 'copyMove';
     });
-  }
-
-  const TL_START_H = 6;
-  const TL_END_H = 23;
-  const TL_HOUR_PX = 44;
-
-  function renderTimeline(ds, events) {
-    const grid = $('#tl-grid');
-    const allday = $('#tl-allday');
-    allday.innerHTML = '';
-    grid.innerHTML = '';
-    grid.style.height = (TL_END_H - TL_START_H + 1) * TL_HOUR_PX + 'px';
-    const [tlY, tlM, tlD] = ds.split('-').map(Number);
-    $('#tl-title').textContent = `${monthCN(ds)} ${weekdayCN(ds)}${holTitle(ds)}` +
-      (lunarFull(tlY, tlM, tlD) ? ' · ' + lunarFull(tlY, tlM, tlD) : '');
-
-    const evs = events.filter((e) => e.date === ds);
-    for (const e of evs.filter((e) => e.allDay)) {
-      const c = document.createElement('div');
-      c.className = 'tl-allday-item ' + EV_COLORS[e.cal % EV_COLORS.length];
-      c.textContent = '📌 ' + e.title;
-      c.title = e.title;
-      allday.appendChild(c);
-    }
-
-    // 小时行
-    for (let h = TL_START_H; h <= TL_END_H; h++) {
-      const row = document.createElement('div');
-      row.className = 'tl-row';
-      row.innerHTML = `<span class="tl-label">${pad2(h)}:00</span><span class="tl-line"></span>`;
-      row.style.top = (h - TL_START_H) * TL_HOUR_PX + 'px';
-      grid.appendChild(row);
-    }
-
-    const hm2min = (s) => { const [h, m] = String(s).split(':').map(Number); return h * 60 + (m || 0); };
-
-    const place = (el, startHM, endHM) => {
-      const top = (hm2min(startHM) - TL_START_H * 60) / 60 * TL_HOUR_PX;
-      const bottomH = endHM ? (hm2min(endHM) - hm2min(startHM)) / 60 * TL_HOUR_PX : TL_HOUR_PX;
-      el.style.top = Math.max(0, top) + 'px';
-      el.style.height = Math.max(18, bottomH - 2) + 'px';
-    };
-
-    // 日历事件块
-    for (const e of evs.filter((e) => !e.allDay && e.startHM)) {
-      const b = document.createElement('div');
-      b.className = 'tl-block ev ' + EV_COLORS[e.cal % EV_COLORS.length];
-      b.innerHTML = `<div class="tb-time">${e.startHM}${e.endHM ? '-' + e.endHM : ''}</div><div class="tb-title">${escapeHtml(e.title)}</div>`;
-      b.title = e.title + (e.loc ? ' @' + e.loc : '');
-      place(b, e.startHM, e.endHM);
-      grid.appendChild(b);
-    }
-
-    // 时间块任务
-    for (const t of state.taskIndex.filter((t2) => taskOccursOn(t2, ds) && t2.start && !t2.done)) {
-      const b = document.createElement('div');
-      b.className = 'tl-block tk';
-      b.innerHTML = `<div class="tb-time">${t.start}${t.end ? '-' + t.end : ''} 🔁?</div><div class="tb-title">${escapeHtml(cleanTaskText(t.text))}</div>`
-        .replace(' 🔁?', t.recurring ? ' 🔁' : '');
-      b.title = `${t.start}-${t.end} ${cleanTaskText(t.text)}（点击打开来源笔记，可拖动调整时间）`;
-      place(b, t.start, t.end);
-      attachTaskDrag(b, t);
-      b.onclick = () => openNote(t.rel, { line: t.line });
-      grid.appendChild(b);
-    }
-
-    // 拖放：落到某小时 → 设置/调整时间（保留原时长）
-    grid.addEventListener('dragover', (ev) => {
-      ev.preventDefault();
-      ev.dataTransfer.dropEffect = 'copyMove';
-      grid.classList.add('drop');
-    });
-    grid.addEventListener('dragleave', () => grid.classList.remove('drop'));
-    grid.addEventListener('drop', async (ev) => {
-      ev.preventDefault();
-      grid.classList.remove('drop');
-      const raw = ev.dataTransfer.getData('text/np-task');
-      if (!raw) return;
-      let task;
-      try { task = JSON.parse(raw); } catch (_) { return; }
-      const rect = grid.getBoundingClientRect();
-      const yOff = ev.clientY - rect.top;
-      let minutes = TL_START_H * 60 + Math.round((yOff / TL_HOUR_PX) * 60 / 15) * 15;
-      minutes = Math.max(TL_START_H * 60, Math.min(TL_END_H * 60 - 15, minutes));
-      const startHM = `${pad2(Math.floor(minutes / 60))}:${pad2(minutes % 60)}`;
-      let endHM = null;
-      if (task.start && task.end) {
-        const dur = hm2min(task.end) - hm2min(task.start);
-        endHM = `${pad2(Math.floor((minutes + Math.max(15, dur)) / 60))}:${pad2((minutes + Math.max(15, dur)) % 60)}`;
-      }
-      const r = await window.api.rescheduleTask(task.rel, task.line, ds, { start: startHM, end: endHM });
-      if (!r.ok) { toast('时间设置失败：' + r.error); return; }
-      toast(`已排到 ${ds} ${startHM}${endHM ? '-' + endHM : ''}`);
-      scheduleTaskIndexRefresh();
-      const events2 = await loadCalEvents(...currentCalRange());
-      renderTimeline(ds, events2);
-      renderMonthGrid(state.calvMonth.getFullYear(), state.calvMonth.getMonth(), events2);
-    });
-  }
-
-  function currentCalRange() {
-    const y = state.calvMonth.getFullYear();
-    const m = state.calvMonth.getMonth();
-    const lastDay = new Date(y, m + 1, 0).getDate();
-    return [`${y}-${pad2(m + 1)}-01`, `${y}-${pad2(m + 1)}-${pad2(lastDay)}`];
   }
 
   function renderYearView() {
@@ -1887,13 +1791,15 @@
           const ds = `${y}-${pad2(m + 1)}-${pad2(d)}`;
           const has = dayHasContent(ds);
           const evc = events.filter((e) => e.date === ds).length;
+          const tkc = state.taskIndex.filter((t) => taskOccursOn(t, ds) && !t.done).length;
           const hol = holOf(ds);
           const s = document.createElement('span');
           s.className = 'yr-day' + (ds === today ? ' today' : '') + (has ? ' has-note' : '') +
-            (evc ? ' has-ev' : '') + (hol && hol.off ? ' holiday' : '');
+            (evc ? ' has-ev' : '') + (tkc ? ' has-task' : '') + (hol && hol.off ? ' holiday' : '');
           s.textContent = d;
           s.title = ds + holTitle(ds) +
             (lunarFull(y, m + 1, d) ? ' · ' + lunarFull(y, m + 1, d) : '') +
+            (tkc ? ` · ${tkc} 个任务` : '') +
             (has ? ' · 有笔记' : '') + (evc ? ` · ${evc} 个事件` : '');
           s.onclick = () => {
             state.calvMonth = new Date(y, m, 1);
