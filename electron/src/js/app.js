@@ -24,7 +24,7 @@
     outline: [],
     calMonth: null,         // Date（当月任意一天）
     sidebarTab: 'calendar',
-    viewMode: 'split',
+    viewMode: 'edit',
     collapsed: new Set(),
     externalDirty: false,
     paletteSeq: 0,
@@ -1237,12 +1237,10 @@
       const head = document.createElement('div');
       head.className = 'wp-day-head';
       const list = dayLists[di].list;
-      const openCount = list.filter((t) => !t.done).length;
       const hol = holOf(ds);
       head.innerHTML = `<span class="wp-day-week">${WEEKDAYS[d.getDay()]}</span>` +
         `<span class="wp-day-date">${d.getMonth() + 1}/${d.getDate()}</span>` +
-        (hol ? `<span class="wp-day-hol${hol.off ? '' : ' work'}">${hol.off ? hol.name : '班'}</span>` : '') +
-        (openCount ? `<span class="wp-day-count">${openCount} 待办</span>` : '');
+        (hol ? `<span class="wp-day-hol${hol.off ? '' : ' work'}">${hol.off ? hol.name : '班'}</span>` : '');
       head.title = ds + holTitle(ds) + '（点击打开每日笔记）';
       head.onclick = () => openDaily(ds);
       cell.appendChild(head);
@@ -1268,15 +1266,9 @@
       for (const t of list) {
         const row = document.createElement('div');
         row.className = 'wp-task' + (t.done ? ' done' : '');
-        row.innerHTML = `<input type="checkbox" ${t.done ? 'checked' : ''}>` +
-          `<div class="wp-task-text">${t.start ? `<span class="wp-task-time">${t.start}-${t.end || ''}</span>` : ''}${t.recurring ? '🔁 ' : ''}${escapeHtml(wpClean(t.text))}` +
+        row.innerHTML = `<div class="wp-task-text">${t.start ? `<span class="wp-task-time">${t.start}-${t.end || ''}</span>` : ''}${t.recurring ? '🔁 ' : ''}${escapeHtml(wpClean(t.text))}` +
           `<span class="wp-task-src">${escapeHtml(t.title || t.name)}</span></div>`;
         row.title = `${t.rel} 第 ${t.line} 行${t.done ? '' : '（可拖到其它天改期）'}`;
-        row.querySelector('input').addEventListener('click', (e) => e.stopPropagation());
-        row.querySelector('input').addEventListener('change', () => {
-          row.classList.toggle('done');
-          toggleTaskInFile(t.rel, t.line);
-        });
         row.addEventListener('click', () => openNote(t.rel, { line: t.line }));
         if (!t.done) {
           row.draggable = true;
@@ -1823,6 +1815,7 @@
 
   function setView(mode, opts) {
     opts = opts || {};
+    if (mode === 'split') mode = 'edit'; // 分栏视图已移除
     state.viewMode = mode;
     editorWrap.classList.remove('view-edit', 'view-split', 'view-preview');
     editorWrap.classList.add('view-' + mode);
@@ -1835,7 +1828,7 @@
   }
 
   function cycleView() {
-    const order = ['edit', 'split', 'preview'];
+    const order = ['edit', 'preview'];
     setView(order[(order.indexOf(state.viewMode) + 1) % order.length]);
   }
 
@@ -2029,7 +2022,7 @@
       if (tab) tab.click();
     } },
     { label: '切换深色 / 浅色主题', hint: 'Ctrl+Shift+L', icon: '🌓', run: () => toggleTheme() },
-    { label: '切换 编辑 / 分栏 / 预览', hint: 'Ctrl+E', icon: '▤', run: () => cycleView() },
+    { label: '切换 编辑 / 预览', hint: 'Ctrl+E', icon: '▤', run: () => cycleView() },
     { label: '设置…', hint: 'Ctrl+,', icon: '⚙', run: () => settingsModal() },
     { label: '在资源管理器中打开笔记库', icon: '📂', run: () => window.api.showInFolder() },
     { label: '更换笔记库…', icon: '🗂', run: () => chooseVaultFlow() },
@@ -2225,7 +2218,7 @@
         <tr><td><kbd>Ctrl</kbd>+<kbd>K</kbd></td><td>命令面板 / 快速打开 / 搜索</td></tr>
         <tr><td><kbd>Ctrl</kbd>+<kbd>N</kbd></td><td>新建笔记</td></tr>
         <tr><td><kbd>Ctrl</kbd>+<kbd>J</kbd></td><td>打开今日笔记</td></tr>
-        <tr><td><kbd>Ctrl</kbd>+<kbd>E</kbd></td><td>切换 编辑 / 分栏 / 预览</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>E</kbd></td><td>切换 编辑 / 预览</td></tr>
         <tr><td><kbd>Ctrl</kbd>+<kbd>L</kbd></td><td>切换当前行任务（自动 @done / 循环重建）</td></tr>
         <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>笔记内搜索</td></tr>
         <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>撤销（编辑器内）</td></tr>
@@ -2250,7 +2243,7 @@
 
   function aboutModal() {
     const wrap = document.createElement('div');
-    wrap.innerHTML = `<p style="margin:0 0 8px">NotePlan for Windows v0.2.0</p>
+    wrap.innerHTML = `<p style="margin:0 0 8px">NotePlan for Windows v0.3.0</p>
       <p style="margin:0;color:var(--text-dim);font-size:12.5px">受 <a href="#" id="about-link" style="color:var(--accent)">NotePlan</a> 启发的开源桌面笔记应用。<br/>
       每日笔记 · Markdown · 任务 · 双向链接 · 命令面板<br/>
       数据就是磁盘上的纯文本文件。</p>`;

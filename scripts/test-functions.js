@@ -22,9 +22,11 @@ function check(name, ok, detail) {
 (async () => {
   await new Promise((r) => setTimeout(r, 500));
 
-  // 1. 打开欢迎笔记
+  // 1. 打开欢迎笔记（默认视图为纯编辑，预览相关断言先切到预览视图）
   evalInPage(`window.__np.openNote('Notes/欢迎使用 NotePlan for Windows.md').then(() => 'ok')`);
   await new Promise((r) => setTimeout(r, 400));
+  evalInPage(`document.querySelector('#view-seg button[data-view=preview]').click()`);
+  await new Promise((r) => setTimeout(r, 500));
   const s1 = evalInPage(`({
     scheds: [...document.querySelectorAll('#preview .schedule')].map(e => e.textContent),
     tags: [...document.querySelectorAll('#preview .tag')].length,
@@ -51,6 +53,9 @@ function check(name, ok, detail) {
   // 再点回去，恢复原状
   evalInPage(`(() => { const b = document.querySelector('#preview input.task-box'); b.click(); return b.checked; })()`);
   await new Promise((r) => setTimeout(r, 1200));
+  // 切回编辑视图（后续 CodeMirror 相关断言需要编辑器可见）
+  evalInPage(`document.querySelector('#view-seg button[data-view=edit]').click()`);
+  await new Promise((r) => setTimeout(r, 400));
 
   // 3. 命令面板搜索
   evalInPage(`window.__np.openPalette('技巧')`);
