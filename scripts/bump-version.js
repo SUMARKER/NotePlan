@@ -7,8 +7,7 @@
  *   新功能/UI  -> X.Y+1.0   (minor)
  *   破坏性变更 -> X+1.0.0   (major)
  * 覆盖位置：electron/package.json(+lock)、tauri.conf.json、Cargo.toml(+lock)、
- *           webview2/setup.nsi、webview2/NotePlanWpf.csproj、
- *           native-wpf/NotePlanNative.csproj、关于弹窗（app.js）
+ *           关于弹窗（app.js）
  * ========================================================================== */
 
 const fs = require('fs');
@@ -86,23 +85,7 @@ swap('tauri/src-tauri/Cargo.toml', `version = "${OLD}"`, `version = "${NEW}"`);
   }
 }
 
-// 6. webview2/setup.nsi（已冻结，保持版本号同步）
-swap('webview2/setup.nsi', `!define VERSION "${OLD}"`, `!define VERSION "${NEW}"`);
-
-// 7. webview2/NotePlanWpf.csproj
-swap('webview2/NotePlanWpf.csproj', `<Version>${OLD}</Version>`, `<Version>${NEW}</Version>`);
-
-// 8. native-wpf/NotePlanNative.csproj（-preview 后缀）
-{
-  const f = 'native-wpf/NotePlanNative.csproj';
-  const c = read(f);
-  const from = `<Version>${OLD}-preview</Version>`;
-  const to = `<Version>${NEW}-preview</Version>`;
-  if (c.includes(from)) { write(f, c.replace(from, to)); changed++; console.log(`  ${f}: ${OLD}-preview -> ${NEW}-preview`); }
-  else console.error(`  跳过 ${f}：未找到 "${from}"`);
-}
-
-// 9. 关于弹窗（app.js）
+// 6. 关于弹窗（app.js）
 swap('electron/src/js/app.js', `NotePlan for Windows v${OLD}`, `NotePlan for Windows v${NEW}`);
 
 console.log(`\n版本 ${OLD} -> ${NEW}，共更新 ${changed} 个文件`);

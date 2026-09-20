@@ -4,11 +4,6 @@ node_modules/
 # 构建产物
 electron/dist/
 electron/dist2/
-webview2/dist/
-webview2/bin/
-webview2/obj/
-webview2/publish-framework/
-webview2/publish-selfcontained/
 native/
 
 # Tauri
@@ -37,11 +32,11 @@ tf3-err.txt
 np-host.log
 
 # 本地截图 / 临时产物
-/native-shot.png
 /shot.png
+
+# cmd / PowerShell 误生成的重定向文件
+/$null
 
 # 系统文件
 .DS_Store
 Thumbs.db
- "# cmd �����ɵ��ض����ļ�" 
- "$null" 

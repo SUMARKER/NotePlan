@@ -2,7 +2,7 @@
 /* ==========================================================================
    Tauri 桥：用 window.__TAURI__.core.invoke 实现 window.api（与 Electron
    preload 完全同形）。仅当运行在 Tauri 环境时启用；Electron 下由 preload.js
-   负责，WebView2 下由 api-shim.js 负责。
+   负责。
    同时切换 vault 图片基址为 http://vault.localhost/（由 Rust 侧自定义协议提供文件）。
    ========================================================================== */
 

@@ -15,9 +15,10 @@
   输入 `>` 补全日期（支持 `今天` / `明天` / `后天` 关键字与日期前缀）；输入 `@` 补全提及。
 - **日历视图**：主界面可在 笔记 / 周计划 / 月历 / 年 之间切换。
   - **周计划**：一周七列总览本周排期任务（任务以内容标签展示，点击打开来源笔记），
-    拖拽改期、每列底部快速添加任务（写入当天每日笔记）；
-    "本周目标"卡片自动保存到 `Notes/周计划/年-W周.md`，排了期的目标会出现在对应
-    日期列（点击目标上的 📅 日期角标可定位并高亮该列）；顶部显示本周任务完成率。
+    拖拽改期；周日起始；
+    "本周目标"卡片自动保存到 `Notes/周计划/年-W周.md`，点击卡片内「＋」即可在框内
+    快速添加（☑ 待办 / ≡ 普通内容），排了期的目标会出现在对应日期列（点击目标上的
+    📅 日期角标可定位并高亮该列）；顶部显示本周任务完成率。
   - **月历**：每格显示日历事件、任务时间块、待办与"有笔记"标记；拖入任务即改期；
     双击某天打开每日笔记。
   - **年视图**：12 个迷你月历，蓝点=有笔记、紫点=有事件、蓝色数字=当天有未完成任务，
@@ -28,11 +29,11 @@
     节假日（休），蓝色「班」角标为调休上班日；内置
     2024–2026 年官方数据（含 9 天春节等新规），浏览到其它年份时自动从 holiday-cn
     拉取并缓存到本地（每天至多尝试一次，离线不影响，设置里可关闭自动更新）；
-    也可以在 `src/js/cn-holidays.js` 手动追加数据（native-wpf 版对应 `CnHolidays.cs`）。
+    也可以在 `src/js/cn-holidays.js` 手动追加数据。
   - **农历与二十四节气**：月历每格日期下方显示农历日（初一显示月名）、节气（绿色）
     与传统农历节日（春节 / 元宵 / 端午 / 中秋 / 重阳 / 腊八 / 除夕等，红色），悬浮提示
     显示完整干支年 + 生肖 + 农历日期；算法覆盖 1900–2100 年。
-  - 日历以**周日为第一列**；侧栏日历 / 月历 / 年视图一致（周计划仍为 ISO 周一起始）。
+  - 日历以**周日为第一列**；侧栏日历 / 月历 / 年视图 / 周计划一致。
 - **每日笔记**：侧边栏月历 + 编辑器上方周条，每一天都有对应笔记（`Calendar/YYYY-MM-DD.md`）。
 - **任务管理**：
   - `- [ ] 任务`，编辑器与预览中均可点击勾选；
@@ -68,14 +69,6 @@ npm start
 ```
 
 ```bat
-:: WebView2 + .NET 版（方案 B），需要 .NET 8 SDK
-cd webview2
-dotnet build -c Release
-:: 运行：binRelease
-et8.0-windowsNotePlan for Windows.exe
-```
-
-```bat
 :: Tauri v2 版（方案 C），需要 Rust 1.75+ (MSVC) 与 VS2022 Build Tools
 cd tauri\src-tauri
 cargo tauri dev     :: 开发模式（热重载）
@@ -90,15 +83,13 @@ cargo tauri build   :: 产出 NSIS 安装包
 ```
 NotePlan/
 ├── electron/    方案 A：Electron 实现（main.js / preload.js / src / dist）
-├── webview2/    方案 B：WebView2 + .NET 8 WPF 宿主（已停止更新，冻结保留）
 ├── tauri/       方案 C：Tauri v2 实现（Rust 后端 + 复用 electron/src 前端）
-├── native-wpf/  方案 D（实验）：WPF + AvalonEdit 原生预览版
-├── scripts/     开发与测试工具（CDP 驱动的端到端测试等，各版通用）
+├── scripts/     开发与测试工具（CDP 驱动的端到端测试等，两版通用）
 └── README.md
 ```
 
-各版共用同一套界面代码；区别只在宿主（Node 主进程 ↔ C# 宿主 ↔ Rust 后端）
-与 `window.api` 的注入方式（contextBridge ↔ postMessage 桥 ↔ Tauri invoke 桥）。
+两版共用同一套界面代码；区别只在宿主（Node 主进程 ↔ Rust 后端）
+与 `window.api` 的注入方式（contextBridge ↔ Tauri invoke 桥）。
 
 ### 方案 C：Tauri v2 版（Rust 后端，安装包最小）
 
@@ -111,28 +102,18 @@ NotePlan/
   notify 文件监听 350ms 防抖 / 系统主题变化事件）
 - 桥接：`window.__TAURI__.core.invoke`（`withGlobalTauri`），事件经 Tauri event
   system（`vault:changed` / `theme:changed` / `menu:*`）；笔记库内图片经
-  `vault://`（WebView2 下为 `http://vault.localhost/`）自定义协议由 Rust 读取
+  `vault://` 自定义协议由 Rust 读取
 - 配置存于 `%LOCALAPPDATA%\NotePlanTauri\config.json`
 
 测试与 Electron 版同一套脚本：设置 `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222`
-启动应用（WebView2 支持 CDP），然后 `node scripts/test-functions.js`（31 项全部通过）。
+启动应用（Windows 上 Tauri 运行于系统内置 WebView2，支持 CDP），然后
+`node scripts/test-functions.js`（31 项全部通过）。
 
 ```bat
 cd tauri\src-tauri
 cargo tauri dev
 cargo tauri build   :: 产出 target/release/noteplan-tauri.exe 与 NSIS 安装包
 ```
-
-### 方案 D：原生预览版（无 Web 技术，WPF + AvalonEdit）
-
-```bat
-cd native-wpf
-dotnet build -c Release
-bin\\Release\\net8.0-windows\\NotePlanNative.exe
-```
-
-需要 .NET 8 SDK（开发）/ .NET 8 Desktop Runtime（运行）。预览版范围：侧栏 + 日历 + 笔记列表 +
-AvalonEdit 编辑器（Markdown 高亮 + 折叠）+ 回收站 + 删除撤销。数据层直接链接 C# 服务。
 
 ## 常用快捷键
 
@@ -200,28 +181,8 @@ NotePlan 笔记库/
 ```
 
 删除的笔记暂存在笔记库的 `.trash/` 隐藏目录（含 index.json 索引），清空回收站后彻底删除。
-应用设置：Electron 版在 `%APPDATA%\noteplan-windows\config.json`，WebView2 版在
-`%LOCALAPPDATA%\NotePlanWpf\config.json`，Tauri 版在 `%LOCALAPPDATA%\NotePlanTauri\config.json`
-（笔记库路径、主题、日历订阅等）。
-
-## 原生预览版（WPF + AvalonEdit，实验性）
-
-`native-wpf/` 是**无 Web 技术**的原生 WPF 实现（预览版）：
-
-- 直接编译链接 `webview2/AppServices.cs`、`IcsService.cs`（C# 数据层单一来源）
-- AvalonEdit 编辑器：Markdown 高亮、标题折叠（后续再加标记隐藏与内联组件）
-- 侧栏：月历（日期点击开每日笔记）、本月笔记、笔记列表（过滤）、回收站（恢复/永久删除/清空）
-- 与另两版**共用同一笔记库格式**，可同时打开同一笔记库
-
-```bat
-cd native-wpf
-dotnet build -c Release
-binRelease
-et8.0-windowsNotePlanNative.exe
-```
-
-需要 .NET 8 SDK（开发）/ .NET 8 Desktop Runtime（运行）。预览版范围：侧栏 + 编辑器 +
-回收站；月历主视图、时间轴、命令面板仍在 Web 版中，后续逐步移植。
+应用设置：Electron 版在 `%APPDATA%\noteplan-windows\config.json`，Tauri 版在
+`%LOCALAPPDATA%\NotePlanTauri\config.json`（笔记库路径、主题、日历订阅等）。
 
 ## 打包发行
 
@@ -233,11 +194,9 @@ et8.0-windowsNotePlanNative.exe
 - **推送 `v*` 标签**（`git tag v0.1.0 && git push origin v0.1.0`）：构建后把两个安装包自动发布为 GitHub Release；
 - **Actions 页面手动触发**：workflow_dispatch 同效。
 
-> 方案 B（WebView2 + .NET）已停止更新：不参与 CI 打包与前端同步，代码冻结保留仅供参考。
-
 ### 版本规范（SemVer）
 
-每次提交按**修改范围**更新版本号（9 处配置统一由脚本修改）：
+每次提交按**修改范围**更新版本号（6 处配置统一由脚本修改）：
 
 | 修改范围 | 版本位 | 示例 |
 | --- | --- | --- |
@@ -248,7 +207,7 @@ et8.0-windowsNotePlanNative.exe
 操作：
 
 ```bat
-node scripts\bump-version.js 0.2.1     :: 升版本（同步 9 处配置）
+node scripts\bump-version.js 0.2.1     :: 升版本（同步 6 处配置）
 git commit -am "..."                   :: 提交
 git tag v0.2.1 && git push origin main --tags   :: 推送后 CI 自动发布该版本 Release
 ```
@@ -275,27 +234,6 @@ npm run dist
 - `NotePlan-for-Windows-Setup-0.1.0.exe` — NSIS 安装包（约 77 MB，安装后约 270 MB，x64）
 - `win-unpacked/` — 免安装目录
 
-### 方案 B：WebView2 + .NET（已停止更新）
-
-> **⚠ 此方案已停止更新**：不再参与 CI 打包与前端功能同步，代码冻结保留仅供参考
-> （功能停留在与 Electron/Tauri 同步的最后版本）。构建方法如下，仍可自行编译。
-
-```bat
-cd webview2NotePlanWpf
-dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true ^
-  -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o publish-selfcontained
-cd ..
-mkdir dist 2>nul
-makensis setup.nsi
-```
-
-makensis 可直接使用 electron-builder 缓存里的 NSIS：
-`%LOCALAPPDATA%\\electron-builder\\Cache\\nsis-3.0.4.1\\nsis-3.0.4.1-w8az6\\makensis.exe`
-（PowerShell 下调用带引号路径记得加 & 调用运算符。）
-
-产出 `webview2/dist/NotePlan-for-Windows-Setup-0.1.0-webview2.exe`（约 63 MB）。另有框架依赖发布
-（`webview2/NotePlanWpf/publish-framework/`，exe 仅 0.95 MB，需目标机装有 .NET 8 Desktop Runtime）。
-
 ### 方案 C：Tauri v2（在 tauri/src-tauri/ 下）
 
 ```bat
@@ -309,11 +247,11 @@ cargo tauri build
 
 实测（同机同库）：
 
-| | Electron | WebView2 + .NET | Tauri v2 |
-| --- | --- | --- | --- |
-| 安装包 | 76.6 MB | 62.8 MB | **2.6 MB** |
-| 主程序体积 | — | — | 9.0 MB |
-| 私有内存（应用全部进程） | 约 256 MB | 约 244 MB | 约 202 MB |
+| | Electron | Tauri v2 |
+| --- | --- | --- |
+| 安装包 | 76.6 MB | **2.6 MB** |
+| 主程序体积 | — | 9.0 MB |
+| 私有内存（应用全部进程） | 约 256 MB | 约 202 MB |
 
 开发环境依赖：Rust 1.75+（MSVC target）、VS2022 Build Tools（C++ 桌面开发）、
 `cargo-tauri` CLI（`cargo install tauri-cli` 或直接下载预编译版；前端为纯静态文件，
@@ -332,15 +270,6 @@ NotePlan/
 │   ├── package.json        含 electron-builder 打包配置
 │   ├── src/                界面 + 编辑器 + 渲染器（与本目录 assets/ 配套）
 │   └── dist/               安装包输出
-├── webview2/               方案 B：WebView2 + .NET 8 WPF 宿主（已停止更新，冻结保留）
-│   ├── NotePlanWpf.csproj  net8.0-windows + Microsoft.Web.WebView2
-│   ├── MainWindow.xaml(.cs) 原生菜单 + WebView2 + JSON 消息分发 + 文件监听 + vault 文件服务
-│   ├── AppServices.cs      文件库/搜索/任务/标签（Electron main.js 的 C# 移植）
-│   ├── IcsService.cs       ICS 拉取/解析/RRULE 展开
-│   ├── NativeMethods.cs    回收站（SHFileOperation）
-│   ├── setup.nsi           NSIS 安装包脚本
-│   ├── src/ assets/        与 electron 各自独立的渲染层拷贝
-│   └── publish-*、dist/    发布输出
 ├── tauri/                  方案 C：Tauri v2（Rust 后端）
 │   ├── src/                复制自 electron/src 的前端 + js/api-shim-tauri.js 桥
 │   ├── src-tauri/Cargo.toml

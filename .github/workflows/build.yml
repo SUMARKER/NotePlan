@@ -81,9 +81,6 @@ jobs:
           path: tauri/src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
 
-  # ---------------------------------------------------------------- WebView2
-  # 方案 B（WebView2 + .NET）已停止更新：不再参与 CI 打包与前端同步，
-  # 代码冻结保留在 webview2/ 目录仅供参考，构建方法见 README。
   # ----------------------------------------------------------------- Release
   # 推送 v* 标签时，把安装包发布为 GitHub Release
   release:

@@ -111,7 +111,7 @@
     let rel = src.replace(/\\/g, '/');
     if (rel.startsWith('/')) rel = rel.slice(1);
     else if (ctx.noteDir) rel = ctx.noteDir + '/' + rel;
-    // Electron 下为 vault:/// 协议；WebView2 下由 api-shim 切换为 https://vault.local/
+    // Electron 下为 vault:/// 协议；Tauri 下由 api-shim-tauri 设为 vault 基址
     const base = (typeof window !== 'undefined' && window.__VAULT_BASE) || 'vault:///';
     return base + encodeURI(rel).replace(/%2F/gi, '/');
   }

@@ -1,9 +1,9 @@
 $ErrorActionPreference = 'Stop'
-# Sync frontend copies (electron / webview2) from tauri/src.
+# Sync frontend copy (electron) from tauri/src.
 # index.html: copy then strip the Tauri-only api-shim script line.
 $tauri = 'D:\workspace\NotePlan\tauri\src'
 $srcIdx = Join-Path $tauri 'index.html'
-foreach ($name in @('electron', 'webview2')) {
+foreach ($name in @('electron')) {
   $dst = "D:\workspace\NotePlan\$name\src"
   Copy-Item (Join-Path $tauri 'css\app.css') (Join-Path $dst 'css\app.css') -Force
   Copy-Item (Join-Path $tauri 'js\app.js') (Join-Path $dst 'js\app.js') -Force

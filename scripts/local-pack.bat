@@ -1,7 +1,7 @@
 @echo off
 setlocal
 rem ==========================================================================
- rem 本地一键打包：Electron + Tauri（WebView2 方案已停止更新，不参与）
+ rem 本地一键打包：Electron + Tauri
  rem 可用环境变量覆盖默认值：
  rem   LOCAL_DIST     Electron 输出目录（默认 D:\noteplan-dist\electron；
  rem                  放在笔记库工作区外，避免被 IDE/索引器锁定 asar）
