@@ -1265,7 +1265,7 @@
       const hol = holOf(ds);
       head.innerHTML = `<span class="wp-day-week">${WEEKDAYS[d.getDay()]}</span>` +
         `<span class="wp-day-date">${d.getMonth() + 1}/${d.getDate()}</span>` +
-        (hol ? `<span class="wp-day-hol${hol.off ? '' : ' work'}">${hol.off ? hol.name : '班'}</span>` : '');
+        (hol ? `<span class="wp-day-hol${hol.off ? '' : ' work'}">${hol.off ? '休' : '班'}</span>` : '');
       head.title = ds + holTitle(ds) + '（点击打开每日笔记）';
       head.onclick = () => openDaily(ds);
       cell.appendChild(head);
@@ -1305,6 +1305,15 @@
         body.appendChild(row);
       }
       cell.appendChild(body);
+
+      // 节假日名放日列底部（样式同月历），不挤头部
+      if (hol && hol.off) {
+        const foot = document.createElement('div');
+        foot.className = 'wp-day-foot';
+        foot.textContent = hol.name;
+        foot.title = `${hol.name}（休）`;
+        cell.appendChild(foot);
+      }
 
       cell.addEventListener('dragover', (ev) => {
         ev.preventDefault();

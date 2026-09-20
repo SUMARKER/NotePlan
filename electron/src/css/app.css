@@ -1472,8 +1472,10 @@ html[data-theme='dark'] .cm-md-hl { background: rgba(245, 200, 0, 0.28); }
 #wp-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
+  grid-template-rows: minmax(300px, 1fr);
   gap: 8px;
   align-items: stretch;
+  flex: 1 0 auto; /* 撑满剩余高度，日列直达区域底部 */
 }
 .wp-day {
   border: 1px solid var(--border);
@@ -1616,14 +1618,25 @@ html[data-theme='dark'] .mv-sub.term { color: #3fce8a; }
 }
 
 /* 周计划 */
-.wp-day-hol { font-size: 10.5px; color: var(--danger); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.wp-day-hol.work {
+.wp-day-hol {
+  flex: none;
   font-size: 9.5px;
   font-weight: 600;
-  color: var(--accent);
-  background: var(--accent-soft);
+  color: var(--danger);
+  background: rgba(220, 38, 38, 0.09);
   border-radius: 4px;
   padding: 0 3px;
+}
+.wp-day-hol.work { color: var(--accent); background: var(--accent-soft); }
+.wp-day-foot {
+  flex: none;
+  padding: 0 8px 7px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--danger);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 年视图 */
