@@ -418,7 +418,12 @@ fn build_menu(app: &AppHandle) -> tauri::Result<()> {
 
 fn handle_menu_event(app: &AppHandle, id: &str) {
     match id {
-        "quit" => app.exit(0),
+        // 走窗口关闭流程（触发 CloseRequested → 渲染进程确认未保存修改），不直接退出
+        "quit" => {
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.close();
+            }
+        }
         "show-vault" => {
             if let Some(state) = app.try_state::<AppState>() {
                 if let Some(vault) = state.vault.lock().unwrap().clone() {
@@ -454,8 +459,19 @@ pub fn run() {
             if let Some(win) = app.get_webview_window("main") {
                 let h = handle.clone();
                 win.on_window_event(move |e| {
-                    if let WindowEvent::ThemeChanged(theme) = e {
-                        let _ = h.emit("theme:changed", *theme == Theme::Dark);
+                    match e {
+                        // 关窗先交给渲染进程确认未保存的修改，确认后经 close_window 放行
+                        WindowEvent::CloseRequested { api, .. } => {
+                            if FORCE_CLOSE.load(std::sync::atomic::Ordering::SeqCst) {
+                                return;
+                            }
+                            api.prevent_close();
+                            let _ = h.emit("app:close-request", ());
+                        }
+                        WindowEvent::ThemeChanged(theme) => {
+                            let _ = h.emit("theme:changed", *theme == Theme::Dark);
+                        }
+                        _ => {}
                     }
                 });
             }
@@ -499,6 +515,7 @@ pub fn run() {
             show_in_folder,
             open_external,
             quit,
+            close_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

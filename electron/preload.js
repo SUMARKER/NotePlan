@@ -56,9 +56,11 @@ contextBridge.exposeInMainWorld('api', {
   defaultVaultPath: () => ipcRenderer.invoke('vault:defaultPath'),
   flushSaveNow: (rel, content) => ipcRenderer.sendSync('note:write-sync', rel, content),
   quit: () => ipcRenderer.invoke('app:quit'),
+  confirmClose: () => ipcRenderer.invoke('app:confirm-close'),
 
   // 事件
   onVaultChanged: (cb) => on('vault:changed', cb),
+  onCloseRequest: (cb) => on('app:close-request', cb),
   onThemeChanged: (cb) => on('theme:changed', cb),
   onMenu: (name, cb) => on('menu:' + name, cb),
 });

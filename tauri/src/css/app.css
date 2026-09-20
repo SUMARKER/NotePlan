@@ -475,23 +475,6 @@ html[data-theme='dark'] #btn-theme .icon-moon { display: none; }
 #editor-wrap.view-preview #editor { display: none; }
 #editor-wrap.view-split #editor { border-right: 1px solid var(--border); }
 
-.ext-banner {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 18px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: var(--bg);
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  box-shadow: var(--shadow-overlay);
-  padding: 9px 14px;
-  font-size: 12.5px;
-  z-index: 30;
-}
-
 #statusbar {
   display: flex;
   align-items: center;

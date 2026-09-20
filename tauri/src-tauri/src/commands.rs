@@ -3,10 +3,10 @@ use chrono::{DateTime, Datelike, Duration as ChronoDuration, Local, Months, Naiv
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::LazyLock;
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 use walkdir::WalkDir;
 
 const CAL_DIR: &str = "Calendar";
@@ -1506,6 +1506,17 @@ pub fn open_external(url: String) -> Value {
 #[tauri::command]
 pub fn quit(app: AppHandle) {
     app.exit(0);
+}
+
+/// 关窗放行标记：渲染进程确认「保存/放弃」后置位，CloseRequested 直接放行
+pub static FORCE_CLOSE: AtomicBool = AtomicBool::new(false);
+
+#[tauri::command]
+pub fn close_window(app: AppHandle) {
+    FORCE_CLOSE.store(true, Ordering::SeqCst);
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.close();
+    }
 }
 
 /* ====================================================================

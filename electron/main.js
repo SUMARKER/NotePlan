@@ -1072,6 +1072,14 @@ function registerIpc() {
   }
 
   ipcMain.handle('app:quit', () => app.quit());
+
+  // 渲染进程确认完未保存的修改后放行关闭
+  ipcMain.handle('app:confirm-close', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.__forceClose = true;
+      mainWindow.close();
+    }
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -1186,8 +1194,20 @@ function createWindow() {
     });
     mainWindow.webContents.on('will-navigate', (e) => e.preventDefault());
 
-    mainWindow.once('ready-to-show', () => mainWindow.show());
+    mainWindow.once('ready-to-show', () => { mainWindow.__ready = true; mainWindow.show(); });
   mainWindow.on('closed', () => { mainWindow = null; });
+
+  // 关窗先交给渲染进程确认未保存的修改（保存/放弃），确认后经 app:confirm-close 放行
+  mainWindow.on('close', (e) => {
+    if (mainWindow.__forceClose || !mainWindow.__ready) return;
+    e.preventDefault();
+    try {
+      mainWindow.webContents.send('app:close-request');
+    } catch (_) {
+      mainWindow.__forceClose = true;
+      mainWindow.close();
+    }
+  });
 }
 
 /* ------------------------------------------------------------------ */

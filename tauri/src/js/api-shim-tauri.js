@@ -69,6 +69,8 @@
 
   const listen = (name, cb) => T.event.listen(name, cb);
   api.onVaultChanged = (cb) => listen('vault:changed', () => cb());
+  api.onCloseRequest = (cb) => listen('app:close-request', () => cb());
+  api.confirmClose = () => T.core.invoke('close_window');
   api.onThemeChanged = (cb) => listen('theme:changed', (e) => cb(!!e.payload));
   api.onMenu = (name, cb) => listen('menu:' + name, () => cb());
 

@@ -26,7 +26,7 @@
     sidebarTab: 'calendar',
     viewMode: 'edit',
     collapsed: new Set(),
-    externalDirty: false,
+    externalDirty: false,    // 当前笔记被外部改动且本地有未保存修改（离开时确认）
     paletteSeq: 0,
     renderGen: 0,
     taskIndex: [],          // 全库任务索引
@@ -433,6 +433,15 @@
     if (same && opts.line != null) { jumpToLine(opts.line); return; }  // 已打开：只跳到目标行
     if (same && !opts.force) return;
 
+    // 离开当前笔记：若有外部修改冲突，先确认是否保存
+    if (state.current && !same && state.current.dirty && state.externalDirty) {
+      leaveConfirmModal(
+        async () => { if (await saveNow(true)) openNote(rel, opts); },
+        () => { state.current.dirty = false; state.externalDirty = false; openNote(rel, opts); }
+      );
+      return;
+    }
+
     if (saveTimerPending()) saveNow();
     const res = await window.api.readNote(rel);
     if (!res.ok) { toast('无法打开笔记：' + res.error); return; }
@@ -444,7 +453,6 @@
     state.suppressDocEvent = false;
     if (Ed.setNoteDir) Ed.setNoteDir(relDir(rel));
     state.externalDirty = false;
-    $('#ext-banner').hidden = true;
 
     setCrumb(rel);
     setView(state.viewMode, { skipFocus: true });
@@ -517,23 +525,30 @@
 
   function saveTimerPending() { return debouncedSave.pending(); }
 
-  async function saveNow() {
-    if (!state.current) return;
-    if (!state.current.dirty) return;
+  async function saveNow(force) {
+    if (!state.current) return false;
+    if (!state.current.dirty) return true;
     const c = state.current;
+    if (state.externalDirty && !force) {
+      // 外部有改动：暂停自动覆盖保存，离开（切换/关闭）时确认
+      setSaveState('ext');
+      return false;
+    }
     c.dirty = false;
     setSaveState('saving');
     const res = await window.api.writeNote(c.rel, Ed.get());
     if (res.ok) {
       c.mtimeMs = res.mtimeMs;
+      state.externalDirty = false;
       setSaveState('saved');
       scheduleTaskIndexRefresh();
       if (isDailyRel(c.rel)) scheduleNotesRefresh();
-    } else {
-      c.dirty = true;
-      toast('保存失败：' + res.error);
-      setSaveState('unsaved');
+      return true;
     }
+    c.dirty = true;
+    toast('保存失败：' + res.error);
+    setSaveState('unsaved');
+    return false;
   }
 
   function setSaveState(s) {
@@ -545,6 +560,7 @@
       const d = new Date();
       el.textContent = `已保存 ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
     } else if (s === 'unsaved') el.textContent = '有未保存的修改';
+    else if (s === 'ext') el.textContent = '外部已修改 · 离开时确认';
     else el.textContent = '就绪';
   }
 
@@ -573,10 +589,12 @@
       }
       const res = await window.api.readNote(curRel);
       if (!res.ok) return;
+      if (res.mtimeMs === state.current.mtimeMs) return; // 自己刚写入的，不算外部修改
       if (res.content !== editor.value) {
         if (state.current.dirty) {
+          // 有未保存修改：不打断编辑，仅弱提示；离开（切换/关闭）时再确认
           state.externalDirty = true;
-          $('#ext-banner').hidden = false;
+          setSaveState('ext');
         } else {
           state.suppressDocEvent = true;
           Ed.set(res.content);
@@ -909,7 +927,7 @@
     Ed.replaceLine(lineNo, composed.line);
     markDirty();
     refreshPreview();
-    saveNow();
+    saveNow(true);
     scheduleTaskIndexRefresh();
   }
 
@@ -930,7 +948,7 @@
     }
     markDirty();
     refreshPreview();
-    saveNow();
+    saveNow(true);
     scheduleTaskIndexRefresh();
     toast('已转为待办任务');
   }
@@ -2154,6 +2172,17 @@
     ]);
   }
 
+  /** 外部修改冲突的离开确认：保存并覆盖 / 不保存 / 取消（留在原地） */
+  function leaveConfirmModal(onSave, onDiscard) {
+    const wrap = document.createElement('div');
+    wrap.textContent = '当前笔记已被外部程序修改，且本地有未保存的修改。直接保存会覆盖外部版本。';
+    showModal('有未保存的修改', wrap, [
+      { label: '不保存', onClick: () => { closeModal(); onDiscard(); } },
+      { label: '保存并覆盖', kind: 'primary', onClick: () => { closeModal(); onSave(); } },
+      { label: '取消' },
+    ]);
+  }
+
   /* ---- 设置 ---- */
 
   function settingsModal() {
@@ -2579,20 +2608,6 @@
     // 笔记库按钮
     $('#btn-vault-folder').onclick = () => window.api.showInFolder();
 
-    // 外部修改横幅
-    $('#btn-ext-reload').onclick = async () => {
-      $('#ext-banner').hidden = true;
-      state.externalDirty = false;
-      state.current.dirty = false;
-      await openNote(state.current.rel, { force: true });
-    };
-    $('#btn-ext-keep').onclick = () => {
-      $('#ext-banner').hidden = true;
-      state.externalDirty = false;
-      state.current.dirty = true; // 下次保存覆盖外部版本
-      setSaveState('unsaved');
-    };
-
     // 右侧面板 Tab
     document.querySelectorAll('.rb-tab').forEach((tab) => {
       tab.onclick = () => {
@@ -2710,7 +2725,7 @@
       else if (mod && k === 'j') { e.preventDefault(); if (!overlayOpen()) openToday(); }
       else if (mod && k === 'e') { e.preventDefault(); if (!overlayOpen()) cycleView(); }
       else if (mod && k === 'l') { e.preventDefault(); if (!overlayOpen()) toggleTasksAtCursor(); }
-      else if (mod && k === 's') { e.preventDefault(); saveNow(); }
+      else if (mod && k === 's') { e.preventDefault(); saveNow(true); }
       else if (mod && k === ',') { e.preventDefault(); if (!overlayOpen()) settingsModal(); }
       else if (e.key === 'F2' && state.current && !state.current.isDaily && !overlayOpen()) { renameNoteFlow(state.current.rel); }
     });
@@ -2718,10 +2733,26 @@
     // 离开窗口时立即保存
     window.addEventListener('blur', () => { if (saveTimerPending()) saveNow(); });
     window.addEventListener('beforeunload', () => {
-      if (state.current && state.current.dirty) {
+      if (state.current && state.current.dirty && !state.externalDirty) {
         window.api.flushSaveNow(state.current.rel, Ed.get());
       }
     });
+    // 关闭/退出窗口：由渲染进程确认未保存的修改后再真正关闭
+    if (window.api.onCloseRequest) {
+      window.api.onCloseRequest(async () => {
+        const c = state.current;
+        if (!c) { window.api.confirmClose(); return; }
+        if (c.dirty && state.externalDirty) {
+          leaveConfirmModal(
+            async () => { if (await saveNow(true)) window.api.confirmClose(); },
+            () => window.api.confirmClose()
+          );
+          return;
+        }
+        if (c.dirty) await saveNow(true);
+        window.api.confirmClose();
+      });
+    }
   }
 
   function overlayOpen() {
