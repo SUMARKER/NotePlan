@@ -1,14 +1,17 @@
 @echo off
 setlocal
 rem ==========================================================================
- rem 本地一键打包：Electron + Tauri
- rem 可用环境变量覆盖默认值：
- rem   LOCAL_DIST     Electron 输出目录（默认 D:\noteplan-dist\electron；
- rem                  放在笔记库工作区外，避免被 IDE/索引器锁定 asar）
- rem   ELECTRON_MIRROR / ELECTRON_BUILDER_BINARIES_MIRROR
- rem                  electron 与 electron-builder 工具的下载镜像（默认 npmmirror）
- rem 依赖：Node.js >= 18（含 npm）、Rust 1.75+ MSVC、cargo tauri-cli
- rem ==========================================================================
+rem  One-click local packaging: Electron + Tauri
+rem  NOTE: keep this file ASCII-only. cmd parses .bat in the ANSI codepage
+rem        (GBK on zh-CN systems); UTF-8 Chinese here garbles the parser.
+rem  Overridable env vars:
+rem    LOCAL_DIST     Electron output dir (default D:\noteplan-dist\electron;
+rem                   kept outside the repo so IDE/indexers cannot lock asar)
+rem    ELECTRON_MIRROR / ELECTRON_BUILDER_BINARIES_MIRROR
+rem                   download mirrors for electron / electron-builder tooling
+rem                   (defaults: npmmirror)
+rem  Requires: Node.js >= 18 (with npm), Rust 1.75+ MSVC, cargo tauri-cli
+rem ==========================================================================
 
 if not defined LOCAL_DIST set "LOCAL_DIST=D:\noteplan-dist\electron"
 if not defined ELECTRON_MIRROR set "ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/"
@@ -31,12 +34,11 @@ call cargo tauri build || goto :err
 popd
 
 echo.
-echo 打包完成：
-echo   Electron 安装包: %LOCAL_DIST%\NotePlan-for-Windows-Setup-*.exe
-echo   Tauri    安装包: %ROOT%\tauri\src-tauri\target\release\bundle\nsis\*-setup.exe
+echo Done. Electron installer: %LOCAL_DIST%\NotePlan-for-Windows-Setup-*.exe
+echo Done. Tauri installer:    %ROOT%\tauri\src-tauri\target\release\bundle\nsis\*-setup.exe
 exit /b 0
 
 :err
 popd
-echo 打包失败（exit %errorlevel%）
+echo Pack failed (exit %errorlevel%)
 exit /b 1
