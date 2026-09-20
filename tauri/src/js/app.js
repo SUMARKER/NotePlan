@@ -41,7 +41,7 @@
     calvYear: null,           // 年视图当前年
     calvSel: null,            // 月视图选中日期
     calEventsCache: { key: '', list: [] },
-    wpWeekStart: null,        // 周计划当前周（周一）
+    wpWeekStart: null,        // 周计划当前周（周日）
     wpGoalKey: '',            // 周目标当前加载的周计划文件
     wpGoalLines: [],          // 周目标段各行（原样保存，任务行可勾选/排期）
     wpGoalKind: 'todo',       // 周目标输入类型：'todo' | 'text'
@@ -1169,8 +1169,15 @@
 
   function startOfWeek(d) {
     const s = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    s.setDate(s.getDate() - (s.getDay() + 6) % 7); // 回到周一
+    s.setDate(s.getDate() - s.getDay()); // 回到周日
     return s;
+  }
+
+  /** 周计划的周标签：取本周三（周中）所属 ISO 周，与「周日 ~ 周六」的显示区间对应 */
+  function wpWeekInfo() {
+    const mid = new Date(state.wpWeekStart);
+    mid.setDate(mid.getDate() + 3);
+    return isoWeekInfo(mid);
   }
 
   /** ISO 周号与 ISO 年份（以本周周四所在年为准） */
@@ -1200,7 +1207,7 @@
       d.setDate(d.getDate() + i);
       days.push(d);
     }
-    const info = isoWeekInfo(state.wpWeekStart);
+    const info = wpWeekInfo();
     const first = todayStr(days[0]);
     const last = todayStr(days[6]);
     ensureHolYears([days[0].getFullYear(), days[6].getFullYear()]); // 跨年周（ISO 周）两侧年份都要
@@ -1281,24 +1288,6 @@
       }
       cell.appendChild(body);
 
-      const add = document.createElement('div');
-      add.className = 'wp-add';
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.placeholder = '＋ 添加任务，回车';
-      input.title = '默认一次性任务。语法：>2026-09-16 指定日期；>起 ~ 止 连续多天；every 3 days / 每周 周期任务；14:00-15:30 时间块';
-      input.addEventListener('keydown', async (e) => {
-        if (e.key !== 'Enter') return;
-        const text = input.value.trim();
-        if (!text) return;
-        const r = await window.api.dailyAppend(ds, `- [ ] ${text} >${ds}`);
-        if (!r.ok) { toast('添加失败：' + r.error); return; }
-        input.value = '';
-        scheduleTaskIndexRefresh();
-      });
-      add.appendChild(input);
-      cell.appendChild(add);
-
       cell.addEventListener('dragover', (ev) => {
         ev.preventDefault();
         ev.dataTransfer.dropEffect = 'move';
@@ -1334,7 +1323,7 @@
     const pct = total ? Math.round(done / total * 100) : 0;
     $('#wp-stats').innerHTML = total
       ? `本周任务 <b>${total}</b> · 完成 <b>${done}</b> · 完成率 <b>${pct}%</b>`
-      : '本周还没有排期任务，从右侧任务面板拖入，或在某天下方快速添加';
+      : '本周还没有排期任务，从右侧任务面板拖入，或在上方目标卡片添加';
   }
 
   /* ---- 周目标：读写 Notes/周计划/YYYY-Wnn.md 的「本周目标」段 ---- */
@@ -1376,7 +1365,7 @@
 
   async function saveWeekGoal() {
     if (!state.wpWeekStart) return false;
-    const info = isoWeekInfo(state.wpWeekStart);
+    const info = wpWeekInfo();
     const rel = weekPlanRel(info.year, info.week);
     let content;
     const r = await window.api.readNote(rel);
@@ -1408,9 +1397,8 @@
     if (!state.wpGoalLines.length) {
       const e = document.createElement('div');
       e.className = 'wp-goal-empty';
-      e.textContent = '还没有目标，在下方输入并回车添加';
+      e.textContent = '还没有目标，点击下方 ＋ 添加';
       box.appendChild(e);
-      return;
     }
     state.wpGoalLines.forEach((raw, i) => {
       const m = raw.match(/^(\s*[-*+]\s+)\[([ xX])\]\s*(.*)$/);
@@ -1477,6 +1465,73 @@
         row.append(txt, actions);
       }
       box.appendChild(row);
+    });
+    appendGoalAddRow(box);
+  }
+
+  /** 目标卡片行内快速添加：点击「＋」行原地变成输入框，不弹独立输入框 */
+  function appendGoalAddRow(box) {
+    const row = document.createElement('div');
+    row.className = 'wp-goal-row wp-goal-addrow';
+    row.innerHTML = '<span class="wp-goal-addhint">＋ 添加目标，回车</span>';
+    row.title = '点击在框内输入；☑/≡ 切换待办或普通内容；Esc 结束';
+    row.onclick = () => startGoalAdd(row);
+    box.appendChild(row);
+  }
+
+  function startGoalAdd(row) {
+    if (row.querySelector('input')) return;
+    row.classList.add('adding');
+    const kindBtn = document.createElement('button');
+    kindBtn.type = 'button';
+    kindBtn.className = 'wp-kind-toggle';
+    kindBtn.addEventListener('mousedown', (e) => e.preventDefault()); // 防止点按.Kind 时输入框失焦
+    kindBtn.onclick = (e) => {
+      e.stopPropagation();
+      state.wpGoalKind = state.wpGoalKind === 'todo' ? 'text' : 'todo';
+      syncKind();
+      input.focus();
+    };
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'wp-goal-edit';
+    const syncKind = () => {
+      kindBtn.textContent = state.wpGoalKind === 'todo' ? '☑' : '≡';
+      kindBtn.title = state.wpGoalKind === 'todo' ? '当前：待办（点击切换为普通内容）' : '当前：普通内容（点击切换为待办）';
+      input.placeholder = state.wpGoalKind === 'todo' ? '添加目标待办，回车' : '添加普通内容，回车';
+    };
+    syncKind();
+    row.replaceChildren(kindBtn, input);
+    input.focus();
+    let finished = false;
+    const commit = async () => {
+      if (finished) return;
+      finished = true;
+      const text = input.value.trim();
+      if (text) {
+        state.wpGoalLines.push(state.wpGoalKind === 'todo' ? `- [ ] ${text}` : text);
+        const ok = await saveWeekGoal();
+        renderWeekGoalList();
+        if (ok) { // 连续录入：新添加行直接进入输入状态
+          const next = document.querySelector('#wp-goal-list .wp-goal-addrow');
+          if (next) startGoalAdd(next);
+        }
+      } else {
+        renderWeekGoalList();
+      }
+    };
+    const cancel = () => {
+      if (finished) return;
+      finished = true;
+      renderWeekGoalList();
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') commit();
+      else if (e.key === 'Escape') cancel();
+    });
+    input.addEventListener('blur', () => {
+      if (finished) return;
+      if (input.value.trim()) commit(); else cancel();
     });
   }
 
@@ -2610,27 +2665,7 @@
       state.wpWeekStart = startOfWeek(new Date());
       renderWeekPlan();
     };
-    // 周计划目标输入：☑/≡ 切换添加类型（待办 / 普通内容）
-    const kindBtn = $('#wp-goal-kind');
-    const kindInput = $('#wp-goal-input');
-    const syncKindUi = () => {
-      kindBtn.textContent = state.wpGoalKind === 'todo' ? '☑' : '≡';
-      kindBtn.title = state.wpGoalKind === 'todo' ? '当前：待办（点击切换为普通内容）' : '当前：普通内容（点击切换为待办）';
-      kindInput.placeholder = state.wpGoalKind === 'todo' ? '＋ 添加目标待办，回车' : '＋ 添加普通内容，回车';
-    };
-    kindBtn.onclick = () => {
-      state.wpGoalKind = state.wpGoalKind === 'todo' ? 'text' : 'todo';
-      syncKindUi();
-      kindInput.focus();
-    };
-    kindInput.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter') return;
-      const text = e.target.value.trim();
-      if (!text) return;
-      state.wpGoalLines.push(state.wpGoalKind === 'todo' ? `- [ ] ${text}` : text);
-      e.target.value = '';
-      saveWeekGoal().then(renderWeekGoalList);
-    });
+    // 周目标快速添加：在目标列表行内进行（见 appendGoalAddRow / startGoalAdd）
 
     // 首次使用引导
     $('#onb-create').onclick = async () => {

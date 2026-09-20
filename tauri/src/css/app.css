@@ -738,7 +738,7 @@ html[data-theme='dark'] .markdown-body mark, html[data-theme='dark'] .markdown-b
 
 /* 月网格 */
 .mv-grid { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: minmax(96px, auto); gap: 6px; }
-.mv-weekday { text-align: center; font-size: 11.5px; color: var(--text-faint); padding: 2px 0 6px; font-weight: 600; }
+.mv-weekday { text-align: center; font-size: 11.5px; color: var(--text-faint); padding: 0; line-height: 1.4; font-weight: 600; }
 .mv-cell {
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -1454,7 +1454,11 @@ html[data-theme='dark'] .cm-md-hl { background: rgba(245, 200, 0, 0.28); }
 .wp-goal-actions button:hover { background: var(--bg-active); color: var(--text); }
 .wp-goal-actions button.g-active { color: var(--accent); font-weight: 700; }
 .wp-goal-empty { font-size: 12px; color: var(--text-faint); padding: 6px; }
-.wp-goal-add { display: flex; align-items: center; gap: 6px; padding: 4px 6px 2px; }
+.wp-goal-addrow { color: var(--text-faint); font-size: 13px; padding: 5px 6px; align-items: center; }
+.wp-goal-addrow .wp-goal-addhint { pointer-events: none; }
+.wp-goal-addrow:hover { color: var(--accent); }
+.wp-goal-addrow.adding { cursor: default; }
+.wp-goal-addrow.adding:hover { background: transparent; color: var(--text-faint); }
 .wp-kind-toggle {
   flex: none;
   width: 30px;
@@ -1467,21 +1471,6 @@ html[data-theme='dark'] .cm-md-hl { background: rgba(245, 200, 0, 0.28); }
   cursor: pointer;
 }
 .wp-kind-toggle:hover { border-color: var(--accent); background: var(--accent-soft); }
-.wp-goal-add input {
-  flex: 1;
-  min-width: 0;
-  box-sizing: border-box;
-  border: 1px dashed var(--border-strong);
-  border-radius: 7px;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  font-size: 13px;
-  padding: 6px 9px;
-  outline: none;
-}
-.wp-goal-add input:focus { border-color: var(--accent); border-style: solid; background: var(--bg-input); }
-.wp-goal-add input::placeholder { color: var(--text-faint); }
 .wp-goal-edit {
   flex: 1;
   min-width: 0;
@@ -1555,21 +1544,6 @@ html[data-theme='dark'] .cm-md-hl { background: rgba(245, 200, 0, 0.28); }
 .wp-ev .wp-ev-time { opacity: 0.75; margin-right: 4px; }
 .wp-empty { font-size: 11.5px; color: var(--text-faint); padding: 4px 6px; }
 
-.wp-add { flex: none; padding: 4px 7px 7px; }
-.wp-add input {
-  width: 100%;
-  box-sizing: border-box;
-  border: 1px dashed var(--border-strong);
-  border-radius: 7px;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  font-size: 12px;
-  padding: 4px 7px;
-  outline: none;
-}
-.wp-add input:focus { border-color: var(--accent); border-style: solid; background: var(--bg-input); }
-.wp-add input::placeholder { color: var(--text-faint); }
 .wp-day.drop { border-color: var(--accent); background: var(--accent-soft); }
 .wp-goal-date { cursor: pointer; }
 .wp-goal-date:hover { text-decoration: underline; }
