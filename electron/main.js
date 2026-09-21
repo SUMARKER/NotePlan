@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeTheme, protocol, net } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeTheme, protocol, net, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const fsp = require('fs/promises');
@@ -1167,11 +1167,15 @@ function applyTheme() {
 /* ------------------------------------------------------------------ */
 
 function createWindow() {
+  // 默认尺寸在小屏幕上按工作区收缩（任务栏除外），避免窗口超出屏幕
+  const { workAreaSize } = screen.getPrimaryDisplay();
+  const width = Math.min(1320, workAreaSize.width);
+  const height = Math.min(860, workAreaSize.height);
   mainWindow = new BrowserWindow({
-    width: 1320,
-    height: 860,
-    minWidth: 980,
-    minHeight: 620,
+    width,
+    height,
+    minWidth: Math.min(980, width),
+    minHeight: Math.min(620, height),
     show: false,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1b1d23' : '#f7f8fa',
     autoHideMenuBar: false,

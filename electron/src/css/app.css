@@ -1594,6 +1594,7 @@ html[data-theme='dark'] .cm-task-box:checked::after { border-color: #1b1d23; }
 .wp-day-date { font-size: 11.5px; color: var(--text-faint); }
 .wp-day.today { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-soft-2); }
 .wp-day.today .wp-day-week { color: var(--accent); }
+.wp-day.selected { border-color: var(--accent); background: var(--accent-soft); }
 
 .wp-day-body { flex: 1; padding: 6px 7px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
 .wp-task {
@@ -1664,6 +1665,8 @@ html[data-theme='dark'] .cm-task-box:checked::after { border-color: #1b1d23; }
 }
 .cal-cw-head { color: var(--text-faint); cursor: default; font-weight: 600; }
 .cal-cw:hover:not(.cal-cw-head) { text-decoration: underline; }
+/* 当前打开笔记所在日期：蓝色数字（与选中蓝底区分） */
+.cal-day.cur-note:not(.selected) { color: var(--accent); font-weight: 600; }
 
 /* 每日笔记列表 */
 .d-hol { font-size: 10.5px; color: var(--danger); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

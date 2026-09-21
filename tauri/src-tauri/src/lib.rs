@@ -454,6 +454,27 @@ pub fn run() {
                 start_watching(&state);
             }
 
+            // 默认窗口尺寸在小屏幕上按显示器收缩，避免窗口超出屏幕
+            // （逻辑像素 = 物理像素 / 缩放比；高度预留任务栏）
+            if let Some(win) = app.get_webview_window("main") {
+                let monitor = win
+                    .current_monitor()
+                    .ok()
+                    .flatten()
+                    .or_else(|| handle.primary_monitor().ok().flatten());
+                if let Some(m) = monitor {
+                    let scale = m.scale_factor();
+                    let logical_w = m.size().width as f64 / scale;
+                    let logical_h = m.size().height as f64 / scale;
+                    let avail_w = (logical_w - 16.0).max(300.0);
+                    let avail_h = (logical_h - 48.0).max(300.0);
+                    let w = 1320.0_f64.min(avail_w);
+                    let h = 860.0_f64.min(avail_h);
+                    let _ = win.set_size(tauri::LogicalSize::new(w, h));
+                    let _ = win.center();
+                }
+            }
+
             // 系统主题变化时通知渲染进程（用于"跟随系统"模式）
             if let Some(win) = app.get_webview_window("main") {
                 let h = handle.clone();

@@ -663,6 +663,11 @@
     setCrumb(rel);
     if (daily) {
       state.raSel = state.current.dateStr;
+      // 日期跨视图一致：右栏月历 / 月历视图跟随当前打开的日期
+      const d = new Date(state.current.dateStr + 'T12:00:00');
+      state.calMonth = new Date(d.getFullYear(), d.getMonth(), 1);
+      state.calvMonth = new Date(d.getFullYear(), d.getMonth(), 1);
+      state.calvSel = state.current.dateStr;
       renderCalendar();
       renderAgenda();
     }
@@ -1550,7 +1555,7 @@
     const first = todayStr(days[0]);
     const last = todayStr(days[6]);
     ensureHolYears([days[0].getFullYear(), days[6].getFullYear()]); // 跨年周（ISO 周）两侧年份都要
-    $('#wp-title').textContent = `${info.year}年第${info.week}周 · ${first.slice(5).replace('-', '/')} ~ ${last.slice(5).replace('-', '/')}`;
+    $('#wp-title').textContent = `${info.year}年第${info.week}周 · ${days[0].getMonth() + 1}/${days[0].getDate()} – ${days[6].getMonth() + 1}/${days[6].getDate()}`;
     loadWeekGoal(info.year, info.week);
 
     const events = await loadCalEvents(first, last);
@@ -1577,7 +1582,7 @@
     days.forEach((d, di) => {
       const ds = todayStr(d);
       const cell = document.createElement('div');
-      cell.className = 'wp-day' + (ds === today ? ' today' : '');
+      cell.className = 'wp-day' + (ds === today ? ' today' : '') + (state.current && state.current.dateStr === ds ? ' selected' : '');
       cell.dataset.date = ds;
 
       const head = document.createElement('div');
@@ -2100,6 +2105,9 @@
       cell.appendChild(items);
       cell.onclick = () => {
         state.calvSel = ds;
+        state.raSel = ds; // 与右栏日程联动
+        renderCalendar();
+        renderAgenda();
         renderMonthGrid(y, m, events);
       };
       cell.ondblclick = () => openDaily(ds);
@@ -2219,6 +2227,7 @@
           s.onclick = () => {
             state.calvMonth = new Date(y, m, 1);
             state.calvSel = ds;
+            state.raSel = ds; // 与右栏日程联动
             state.calvMode = 'month';
             document.querySelectorAll('#calv-seg button').forEach((b) => b.classList.toggle('active', b.dataset.cal === 'month'));
             renderCalView();
@@ -2727,7 +2736,7 @@
 
   function aboutModal() {
     const wrap = document.createElement('div');
-    wrap.innerHTML = `<p style="margin:0 0 8px">NotePlan for Windows v0.5.2</p>
+    wrap.innerHTML = `<p style="margin:0 0 8px">NotePlan for Windows v0.5.3</p>
       <p style="margin:0;color:var(--text-dim);font-size:12.5px">受 <a href="#" id="about-link" style="color:var(--accent)">NotePlan</a> 启发的开源桌面笔记应用。<br/>
       每日笔记 · Markdown · 任务 · 双向链接 · 命令面板<br/>
       数据就是磁盘上的纯文本文件。</p>
