@@ -190,6 +190,25 @@ fn scan_vault(vault: &Path) -> Vec<ScanFile> {
     out
 }
 
+/// 遍历所有子文件夹（不含根与隐藏目录），用于把空文件夹也展示到笔记树
+fn scan_dirs(vault: &Path) -> Vec<String> {
+    let mut out = Vec::new();
+    for entry in WalkDir::new(vault)
+        .min_depth(1)
+        .into_iter()
+        .filter_entry(|e| {
+            let name = e.file_name().to_string_lossy();
+            !name.starts_with('.') && !SKIP_DIRS.contains(name.as_ref())
+        })
+    {
+        let Ok(entry) = entry else { continue };
+        if entry.file_type().is_dir() {
+            out.push(abs_to_rel(vault, entry.path()));
+        }
+    }
+    out
+}
+
 /// 读取文件开头 8KB，避免为提取标题整读大文件
 fn read_head(abs: &Path) -> std::io::Result<String> {
     use std::io::Read;
@@ -393,6 +412,14 @@ pub fn list_notes(state: State<AppState>) -> Value {
             })
         })
         .collect();
+    // 空文件夹也返回（md:false + dir:true），否则「＋文件夹」后笔记树看不到它
+    for d in scan_dirs(&vault) {
+        let name = d.rsplit('/').next().unwrap_or(&d).to_string();
+        notes.push(json!({
+            "rel": d, "name": name, "md": false, "dir": true,
+            "mtimeMs": 0, "size": 0, "title": null, "empty": true,
+        }));
+    }
     let vp = vault.to_string_lossy().into_owned();
     json!({ "vaultPath": vp, "notes": notes })
 }

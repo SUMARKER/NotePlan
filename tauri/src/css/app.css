@@ -33,8 +33,8 @@
   --event-bg: rgba(226, 146, 62, 0.18);
   --event-border: rgba(203, 124, 44, 0.55);
   --event-text: #9a6430;
-  /* 任务勾选后的深色填充 */
-  --task-checked: #3a3d44;
+  /* 任务勾选完成后的灰色填充 */
+  --task-checked: #9aa0a6;
 
   --tag: #cd6628;
   --tag-soft: rgba(205, 102, 40, 0.1);
@@ -75,7 +75,7 @@ html[data-theme='dark'] {
   --event-bg: rgba(226, 146, 62, 0.22);
   --event-border: rgba(226, 146, 62, 0.5);
   --event-text: #d9a06a;
-  --task-checked: #e7e9ee;
+  --task-checked: #6f7680;
 
   --tag: #e89055;
   --tag-soft: rgba(232, 144, 85, 0.16);
@@ -1513,7 +1513,7 @@ html[data-theme='dark'] .cm-task-box:checked::after { border-color: #1b1d23; }
 }
 .wp-goal-row:hover { background: var(--bg-hover); }
 .wp-goal-row.done .wp-goal-text { text-decoration: line-through; color: var(--text-faint); }
-.wp-goal-row input[type='checkbox'] { margin: 2px 0 0; flex: none; accent-color: var(--accent); cursor: pointer; }
+.wp-goal-row input[type='checkbox'] { margin: 2px 0 0; flex: none; accent-color: var(--task-checked); cursor: pointer; }
 .wp-goal-text { flex: 1; min-width: 0; font-size: 13.5px; line-height: 1.55; word-break: break-word; }
 .wp-goal-date { font-size: 11px; color: var(--link); font-weight: 600; margin-left: 6px; white-space: nowrap; }
 .wp-goal-plain { color: var(--text-dim); }
@@ -1925,18 +1925,27 @@ html[data-theme='dark'] .ra-b-time { color: var(--text-dim); }
    ========================================================================== */
 
 .markdown-body li.task.cancel > .task-body { color: var(--text-faint); text-decoration: line-through; }
+/* 废弃任务复选框：灰色 ✕ */
 .markdown-body input.task-box.cancel::after {
-  content: '';
+  content: '✕';
   position: absolute;
-  left: 2.5px; top: 5.5px;
-  width: 7px; height: 2px;
-  background: var(--text-faint);
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1;
 }
 .cm-md-taskcancel { color: var(--text-faint); text-decoration: line-through; }
 .cm-task-box-cancel::after {
-  content: '';
+  content: '✕';
   position: absolute;
-  left: 2.5px; top: 5.5px;
-  width: 7px; height: 2px;
-  background: var(--text-faint);
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1;
 }

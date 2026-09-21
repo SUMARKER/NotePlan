@@ -515,9 +515,12 @@
   function buildTree() {
     const root = { name: '', rel: '', children: new Map(), notes: [] };
     for (const n of state.notes) {
-      if (!n.md || n.rel.startsWith('Calendar/')) continue;
+      const isDir = n.dir === true;
+      // Calendar（每日笔记）不在笔记树展示；其余空目录条目仅用于生成文件夹节点
+      if (n.rel === 'Calendar' || n.rel.startsWith('Calendar/')) continue;
+      if (!isDir && !n.md) continue;
       const parts = n.rel.split('/');
-      parts.pop();
+      if (!isDir) parts.pop();
       let node = root, acc = '';
       for (const p of parts) {
         acc = acc ? acc + '/' + p : p;
@@ -526,7 +529,7 @@
         }
         node = node.children.get(p);
       }
-      node.notes.push(n);
+      if (!isDir) node.notes.push(n);
     }
     return root;
   }
@@ -615,16 +618,65 @@
     const box = $('#tag-cloud');
     box.innerHTML = '';
     if (!tags || !tags.length) {
-      box.innerHTML = '<span class="tree-empty" style="padding:0">暂无标签</span>';
+      box.innerHTML = '<span class="tree-empty" style="padding:0">暂无标签<br/>右键标签可重命名 / 删除</span>';
       return;
     }
     for (const t of tags.slice(0, 24)) {
       const chip = document.createElement('button');
       chip.className = 'tag-chip';
       chip.innerHTML = `#${escapeHtml(t.tag)}<span class="t-count">${t.count}</span>`;
+      chip.title = '点击搜索该标签 · 右键管理（重命名 / 删除）';
       chip.onclick = () => openPalette('#' + t.tag);
+      chip.oncontextmenu = (ev) => {
+        ev.preventDefault();
+        tagContext(ev, t.tag);
+      };
       box.appendChild(chip);
     }
+  }
+
+  /* ---- 标签管理：右键重命名 / 删除（跨全库改写笔记内容） ---- */
+
+  function tagContext(ev, tag) {
+    showCtx(ev.clientX, ev.clientY, [
+      { label: '重命名标签…', onClick: () => renameTagFlow(tag) },
+      { label: '删除标签', danger: true, onClick: () =>
+        confirmModal('删除标签', `将从所有笔记中移除 #${tag}（直接改写文件，不可撤销）。`, '删除', () => rewriteTagEveryVault(tag, '')) },
+    ]);
+  }
+
+  function renameTagFlow(tag) {
+    inputModal('重命名标签', `将 #${tag} 重命名为（不含 # 号）：`, tag, (v) => {
+      const next = v.replace(/^#/, '').trim();
+      if (!next || next === tag) return;
+      rewriteTagEveryVault(tag, next);
+    });
+  }
+
+  /* 标签结束边界：后一个字符不能仍是标签字符（与书写语法一致） */
+  const TAG_END = "(?![^\\s#.,!?;:，。！？；：()（）\\[\\]{}'\"<>…·、“”])";
+
+  async function rewriteTagEveryVault(oldTag, newTag) {
+    const esc = oldTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp('#' + esc + TAG_END, 'g');
+    const replacement = newTag ? `#${newTag}` : '';
+    let files = 0, hits = 0;
+    for (const n of state.notes.filter((x) => x.md)) {
+      let res;
+      try { res = await window.api.readNote(n.rel); } catch (_) { continue; }
+      if (!res.ok) continue;
+      const count = (res.content.match(re) || []).length;
+      if (!count) continue;
+      const w = await window.api.writeNote(n.rel, res.content.replace(re, () => replacement));
+      if (!w.ok) continue;
+      files++;
+      hits += count;
+    }
+    await refreshNotes();
+    scheduleTaskIndexRefresh();
+    toast(hits
+      ? `已${newTag ? '重命名' : '删除'}标签 #${oldTag}${newTag ? ' → #' + newTag : ''}：${hits} 处 / ${files} 个笔记`
+      : '没有找到匹配的标签');
   }
 
   /* ======================================================================
@@ -712,8 +764,13 @@
     }
   }
 
+  function displayRel(rel) {
+    return String(rel || '').replace(/^Calendar[/]/, '日历/');
+  }
   function setCrumb(rel) {
     const parts = rel.split('/');
+    // Calendar 为目录名（保持数据结构），展示层统一映射为中文
+    if (parts[0] === 'Calendar') parts[0] = '日历';
     const file = parts.pop();
     const here = escapeHtml(baseName(file));
     const pathHtml = parts.map((p) => `<span>${escapeHtml(p)}</span>`).join('<span class="c-sep">/</span>');
@@ -2316,7 +2373,7 @@
         .sort((a, b) => scoreNote(a, q) - scoreNote(b, q))
         .slice(0, 8);
       for (const n of titleHits) {
-        items.push({ type: 'note', rel: n.rel, title: noteTitle(n), sub: n.rel, icon: '📄' });
+        items.push({ type: 'note', rel: n.rel, title: noteTitle(n), sub: displayRel(n.rel), icon: '📄' });
       }
       // 全文搜索
       if (q.length >= 2) {
@@ -2448,7 +2505,6 @@
     if (!r.ok) { toast('创建失败：' + r.error); return; }
     await refreshNotes();
     await openNote(r.rel, { force: true });
-    setView('edit');
     renameNoteFlow(r.rel, true);
   }
 
@@ -2736,7 +2792,7 @@
 
   function aboutModal() {
     const wrap = document.createElement('div');
-    wrap.innerHTML = `<p style="margin:0 0 8px">NotePlan for Windows v0.5.4</p>
+    wrap.innerHTML = `<p style="margin:0 0 8px">NotePlan for Windows v0.5.5</p>
       <p style="margin:0;color:var(--text-dim);font-size:12.5px">受 <a href="#" id="about-link" style="color:var(--accent)">NotePlan</a> 启发的开源桌面笔记应用。<br/>
       每日笔记 · Markdown · 任务 · 双向链接 · 命令面板<br/>
       数据就是磁盘上的纯文本文件。</p>

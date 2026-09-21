@@ -111,6 +111,32 @@ async function scanVault() {
   return out;
 }
 
+/** 遍历所有子文件夹（不含根与隐藏目录），用于把空文件夹也展示到笔记树 */
+async function scanDirs() {
+  if (!vaultPath) return [];
+  const out = [];
+  const SKIP = new Set(['.git', '.obsidian', '.trash', 'node_modules', '$RECYCLE.BIN', 'System Volume Information', '.DS_Store', 'desktop.ini']);
+
+  async function walk(dir, relBase) {
+    let entries;
+    try {
+      entries = await fsp.readdir(dir, { withFileTypes: true });
+    } catch (_) { return; }
+    for (const ent of entries) {
+      if (ent.name.startsWith('.') || SKIP.has(ent.name)) continue;
+      const abs = path.join(dir, ent.name);
+      const rel = relBase ? relBase + '/' + ent.name : ent.name;
+      if (ent.isDirectory()) {
+        out.push({ rel, name: ent.name });
+        await walk(abs, rel);
+      }
+    }
+  }
+
+  await walk(vaultPath, '');
+  return out;
+}
+
 /** 读取文件开头若干字节，提取第一个 `# 标题` 作为显示标题 */
 function extractTitle(content) {
   for (const line of content.split(/\r?\n/)) {
@@ -441,6 +467,12 @@ function registerIpc() {
       } catch (_) {}
       notes.push({ rel: f.rel, name: f.name, md: true, mtimeMs: f.mtimeMs, size: f.size, title, empty });
     }
+    // 空文件夹也返回（md:false + dir:true），否则「＋文件夹」后笔记树看不到它
+    try {
+      for (const d of await scanDirs()) {
+        notes.push({ rel: d.rel, name: d.name, md: false, dir: true, mtimeMs: 0, size: 0, title: null, empty: true });
+      }
+    } catch (_) {}
     return { vaultPath, notes };
   });
 
