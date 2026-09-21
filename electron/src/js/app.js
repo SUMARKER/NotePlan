@@ -173,6 +173,7 @@
       if ((state.settings.theme || 'auto') === 'auto') applyTheme();
     });
     window.api.onVaultChanged(() => { onVaultChanged(); scheduleTaskIndexRefresh(); });
+    startReminderLoop();
 
     if (state.settings.vaultExists && state.settings.vaultPath) {
       await enterVault();
@@ -1197,10 +1198,134 @@
     if (state.rightTab === 'tasks') renderTasksPanel();
     if (state.rightTab === 'agenda') renderAgenda();
     if (state.mainView === 'week') renderWeekPlan();
+    checkReminders();
   }
   function scheduleTaskIndexRefresh() {
     clearTimeout(taskIndexTimer);
     taskIndexTimer = setTimeout(loadTaskIndex, 700);
+  }
+
+  /* ======================================================================
+   * 任务提醒
+   *  - 每日提醒：当天到期（排期今天 / 每日笔记隐式今天 / 循环命中）+ 未排期 +
+   *    过期未完成的任务，在配置的每日提醒时间（默认 17:00）汇总提醒一条；
+   *  - 提前提醒：带开始时间的任务在「开始时间 − 提前分钟数」（默认 15 分钟）提醒；
+   *  - 已完成 / 废弃任务不提醒；触发按天去重；配置存 localStorage（设备级）。
+   * ==================================================================== */
+
+  const REMINDER_CFG_KEY = 'np.reminders';
+  const REMINDER_FIRED_KEY = 'np.reminders.fired';
+
+  function reminderConfig() {
+    let c = {};
+    try { c = JSON.parse(localStorage.getItem(REMINDER_CFG_KEY) || '{}') || {}; } catch (_) { c = {}; }
+    return {
+      dailyEnabled: c.dailyEnabled !== false,
+      dailyTime: /^\d{1,2}:\d{2}$/.test(c.dailyTime || '') ? c.dailyTime : '17:00',
+      leadEnabled: c.leadEnabled !== false,
+      leadMinutes: Number.isFinite(c.leadMinutes) ? Math.max(0, Math.min(240, c.leadMinutes)) : 15,
+    };
+  }
+  function saveReminderConfig(patch) {
+    const merged = Object.assign(reminderConfig(), patch);
+    try { localStorage.setItem(REMINDER_CFG_KEY, JSON.stringify(merged)); } catch (_) { /* 忽略 */ }
+  }
+  function reminderFiredToday(key) {
+    let map = {};
+    try { map = JSON.parse(localStorage.getItem(REMINDER_FIRED_KEY) || '{}') || {}; } catch (_) { map = {}; }
+    return map[key] === todayStr();
+  }
+  function markReminderFired(key) {
+    let map = {};
+    try { map = JSON.parse(localStorage.getItem(REMINDER_FIRED_KEY) || '{}') || {}; } catch (_) { map = {}; }
+    map[key] = todayStr();
+    // 只保留近 7 天的记录
+    const cutoff = todayStr(new Date(Date.now() - 7 * 86400000));
+    for (const k of Object.keys(map)) {
+      if (!(map[k] >= cutoff)) delete map[k];
+    }
+    try { localStorage.setItem(REMINDER_FIRED_KEY, JSON.stringify(map)); } catch (_) { /* 忽略 */ }
+  }
+
+  /** 任务在「今天」的生效日期：显式排期 > 每日笔记隐式日期 > null（未排期） */
+  function reminderEffectiveDate(t) {
+    if (t.scheduled) return t.scheduled;
+    const m = (t.rel || '').match(/^Calendar\/(\d{4}-\d{2}-\d{2})\.md$/);
+    return m ? m[1] : null;
+  }
+
+  function showReminder(title, body, onOpen) {
+    let native = false;
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        const n = new Notification(title, { body, silent: false });
+        n.onclick = () => {
+          try { window.focus(); } catch (_) { /* 忽略 */ }
+          onOpen();
+          n.close();
+        };
+        native = true;
+      }
+    } catch (_) { /* 忽略，走应用内 toast */ }
+    toast(`🔔 ${title}${body ? ' — ' + body : ''}`, { label: '查看', run: onOpen });
+    return native;
+  }
+
+  function checkReminders() {
+    if (!state.taskIndex.length) return;
+    const cfg = reminderConfig();
+    const now = new Date();
+    const today = todayStr(now);
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+
+    // 每日提醒：一条汇总（当天到期 + 未排期 + 过期未完成）
+    if (cfg.dailyEnabled && nowMin >= hmToMin(cfg.dailyTime) && !reminderFiredToday('daily#' + today)) {
+      const due = [];
+      for (const t of state.taskIndex) {
+        if (t.done) continue;
+        const eff = reminderEffectiveDate(t);
+        const occursToday = taskOccursOn(t, today) || t.rel === `Calendar/${today}.md`;
+        const undated = !eff && !occursToday;
+        const overdue = !!eff && eff < today && !occursToday;
+        if (occursToday || undated || overdue) due.push(t);
+      }
+      if (due.length) {
+        markReminderFired('daily#' + today);
+        const head = due.slice(0, 5).map((t) => cleanTaskText(t.text)).join('；');
+        const more = due.length > 5 ? ` 等 ${due.length} 项` : '';
+        showReminder('今日任务提醒', `${head}${more}`, () => openToday());
+      }
+    }
+
+    // 提前提醒：带开始时间且今天发生的任务，开始前 N 分钟提醒（每个任务每天最多一次）
+    if (cfg.leadEnabled) {
+      for (const t of state.taskIndex) {
+        if (t.done) continue;
+        const occursToday = taskOccursOn(t, today) || t.rel === `Calendar/${today}.md`;
+        if (!occursToday) continue;
+        const tm = parseTaskTime(t.text);
+        if (!tm || !tm.start) continue;
+        const startMin = hmToMin(tm.start);
+        const fireMin = startMin - cfg.leadMinutes;
+        if (nowMin < fireMin || nowMin > startMin) continue; // 未到 / 已错过开始
+        const key = `lead#${t.rel}#${t.line}#${today}`;
+        if (reminderFiredToday(key)) continue;
+        markReminderFired(key);
+        showReminder(`${tm.start} ${cleanTaskText(t.text)}`, `${cfg.leadMinutes} 分钟后开始`, () => openNote(t.rel, { line: t.line }));
+      }
+    }
+  }
+
+  let reminderTimer = null;
+  function startReminderLoop() {
+    if (reminderTimer) clearInterval(reminderTimer);
+    checkReminders();
+    reminderTimer = setInterval(checkReminders, 30000);
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+        Notification.requestPermission().catch(() => {});
+      }
+    } catch (_) { /* 忽略 */ }
   }
 
   function renderWeekBar() {
@@ -2412,6 +2537,22 @@
         <input type="checkbox" id="set-hol-auto">
         自动更新节假日数据（浏览到新年份时从 holiday-cn 拉取并缓存；内置 2024–2026）
       </label>
+      <div style="color:var(--text-dim);font-size:12.5px;margin:12px 0 4px">任务提醒</div>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:12.5px;color:var(--text)">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="rem-daily-on">
+          每日提醒：当天到期 / 未排期 / 过期未完成的任务在每天
+          <input type="time" id="rem-daily-time" style="width:96px;padding:2px 6px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);color:var(--text);font-family:inherit">
+          汇总提醒（默认 17:00）
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="rem-lead-on">
+          到期前提醒：带开始时间的任务在开始前
+          <input type="number" id="rem-lead-min" min="0" max="240" style="width:56px;padding:2px 6px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);color:var(--text);font-family:inherit">
+          分钟提醒（默认 15 分钟）
+        </label>
+        <div style="color:var(--text-faint);font-size:11.5px">提醒配置保存在本机（不同步到笔记库）。</div>
+      </div>
       <div style="margin-top:12px;display:flex;gap:8px">
         <button class="mini-btn" id="set-change-vault">更换笔记库…</button>
         <button class="mini-btn" id="set-open-vault">打开笔记库文件夹</button>
@@ -2482,6 +2623,31 @@
       }
     });
 
+    // 任务提醒配置（localStorage，设备级）
+    const rc = reminderConfig();
+    const remDailyOn = wrap.querySelector('#rem-daily-on');
+    const remDailyTime = wrap.querySelector('#rem-daily-time');
+    const remLeadOn = wrap.querySelector('#rem-lead-on');
+    const remLeadMin = wrap.querySelector('#rem-lead-min');
+    remDailyOn.checked = rc.dailyEnabled;
+    remDailyTime.value = rc.dailyTime;
+    remLeadOn.checked = rc.leadEnabled;
+    remLeadMin.value = rc.leadMinutes;
+    const saveReminderUi = () => {
+      const t = (remDailyTime.value || '').trim();
+      saveReminderConfig({
+        dailyEnabled: remDailyOn.checked,
+        dailyTime: /^\d{1,2}:\d{2}$/.test(t) ? t : '17:00',
+        leadEnabled: remLeadOn.checked,
+        leadMinutes: Math.max(0, Math.min(240, parseInt(remLeadMin.value, 10) || 0)),
+      });
+      checkReminders();
+    };
+    remDailyOn.addEventListener('change', saveReminderUi);
+    remDailyTime.addEventListener('change', saveReminderUi);
+    remLeadOn.addEventListener('change', saveReminderUi);
+    remLeadMin.addEventListener('change', saveReminderUi);
+
     wrap.querySelector('#set-change-vault').onclick = () => { closeModal(); chooseVaultFlow(); };
     wrap.querySelector('#set-open-vault').onclick = () => { closeModal(); window.api.showInFolder(); };
 
@@ -2507,6 +2673,7 @@
         <tr><td><code>14:00-15:30 内容</code></td><td>时间段任务：进入右栏当日时间轴（支持单个 14:00，不跨天）</td></tr>
         <tr><td><code>@done(日期)</code></td><td>勾选任务时自动添加，取消勾选自动移除</td></tr>
         <tr><td><code>every day / 每天 / 每2周</code></td><td>循环任务：完成时自动排到下一周期</td></tr>
+        <tr><td><code>提醒</code></td><td>带时间的任务在开始前提醒（默认 15 分钟）；当天 / 未排期 / 过期任务在每日提醒时间（默认 17:00）汇总提醒；设置 → 任务提醒 可配置</td></tr>
         <tr><td><code>选中文字</code></td><td>右键 → 转为待办任务 / 添加为今日待办</td></tr>
       </table>
       <h4>书写语法</h4>
@@ -2548,7 +2715,7 @@
 
   function aboutModal() {
     const wrap = document.createElement('div');
-    wrap.innerHTML = `<p style="margin:0 0 8px">NotePlan for Windows v0.4.3</p>
+    wrap.innerHTML = `<p style="margin:0 0 8px">NotePlan for Windows v0.5.0</p>
       <p style="margin:0;color:var(--text-dim);font-size:12.5px">受 <a href="#" id="about-link" style="color:var(--accent)">NotePlan</a> 启发的开源桌面笔记应用。<br/>
       每日笔记 · Markdown · 任务 · 双向链接 · 命令面板<br/>
       数据就是磁盘上的纯文本文件。</p>`;
