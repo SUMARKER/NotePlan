@@ -162,10 +162,8 @@
     state.settings = Object.assign(state.settings, await window.api.getSettings());
     state.calMonth = new Date();
     state.raSel = todayStr();
-    // 本周周一
-    const now = new Date();
-    const dow = (now.getDay() + 6) % 7;
-    state.weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow);
+    // 本周周日（与月历 / 周计划一致的周日起始）
+    state.weekStart = startOfWeek(new Date());
     applyTheme();
     initEditor();
     bindStaticEvents();
@@ -2534,7 +2532,7 @@
 
   function aboutModal() {
     const wrap = document.createElement('div');
-    wrap.innerHTML = `<p style="margin:0 0 8px">NotePlan for Windows v0.4.0</p>
+    wrap.innerHTML = `<p style="margin:0 0 8px">NotePlan for Windows v0.4.1</p>
       <p style="margin:0;color:var(--text-dim);font-size:12.5px">受 <a href="#" id="about-link" style="color:var(--accent)">NotePlan</a> 启发的开源桌面笔记应用。<br/>
       每日笔记 · Markdown · 任务 · 双向链接 · 命令面板<br/>
       数据就是磁盘上的纯文本文件。</p>`;
@@ -2857,9 +2855,7 @@
       renderWeekBar();
     };
     $('#wb-today').onclick = () => {
-      const now = new Date();
-      const dow = (now.getDay() + 6) % 7;
-      state.weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow);
+      state.weekStart = startOfWeek(new Date());
       renderWeekBar();
     };
     renderWeekBar();
