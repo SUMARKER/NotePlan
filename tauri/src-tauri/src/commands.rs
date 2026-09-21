@@ -392,7 +392,7 @@ pub fn list_notes(state: State<AppState>) -> Value {
         return json!({ "vaultPath": null, "notes": [] });
     };
     let files = scan_vault(&vault);
-    let notes: Vec<Value> = files
+    let mut notes: Vec<Value> = files
         .iter()
         .map(|f| {
             let (title, empty) = if f.md {
