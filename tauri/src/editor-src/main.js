@@ -65,12 +65,19 @@ class TaskWidget extends WidgetType {
     box.className = 'cm-task-box' + (this.square ? ' cm-task-box-sq' : '') + (this.cancelled ? ' cm-task-box-cancel' : '');
     box.checked = this.checked;
     box.contentEditable = 'false';
-    box.addEventListener('click', (e) => {
+    // 必须在 mousedown 阶段拦截：真实点击时 CodeMirror 会先处理选区并重渲染，
+    // click 事件会落在被替换的节点上导致勾选失效
+    box.addEventListener('mousedown', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      // 待办 → 完成；完成/废弃 → 回到待办
+      // 待办 → 完成；完成 / 废弃 → 回到待办
       const toDone = !this.checked && !this.cancelled;
       this.host.onTaskToggle(this.lineNo, toDone);
+    });
+    box.addEventListener('click', (e) => {
+      // 拦截原生 click，避免复选框视觉状态与实际任务状态短暂不一致
+      e.preventDefault();
+      e.stopPropagation();
     });
     wrap.appendChild(box);
     if (this.recurring) {
@@ -567,7 +574,8 @@ function buildCompletions(prov) {
         options.push({
           label: `${label}  ${ds} ${WEEK[d.getDay()]}`,
           type: 'keyword',
-          apply: `>${ds} `,
+          // 插入起点在用户输入的 ">" 之后，这里不能再带 ">"（否则变成 >>）
+          apply: `${ds} `,
           boost: 10,
         });
         return;

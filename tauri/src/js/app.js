@@ -271,7 +271,7 @@
         e.appendChild(dot);
       }
       e.title = ds + weekdayCN(ds) + holTitle(ds) + (lunarFull(y, m + 1, d) ? ' · ' + lunarFull(y, m + 1, d) : '') +
-        '（点击查看当天安排，双击打开每日笔记）';
+        '（点击打开当天笔记并查看安排）';
       if (ds === today) e.classList.add('today');
       if (selected === ds) e.classList.add('selected');
       if (curNote === ds) e.classList.add('cur-note');
@@ -280,12 +280,8 @@
         dot.className = 'dot';
         e.appendChild(dot);
       }
-      e.onclick = () => {
-        state.raSel = ds;
-        renderCalendar();
-        renderAgenda();
-      };
-      e.ondblclick = () => openDaily(ds);
+      // 单击：打开当天笔记（日程/周条/月历随之联动）
+      e.onclick = () => openDaily(ds);
       grid.appendChild(e);
       cellInWeek++;
       // 每行第 3 天之后是行尾：插入下一行的 CW
@@ -2792,7 +2788,7 @@
 
   function aboutModal() {
     const wrap = document.createElement('div');
-    wrap.innerHTML = `<p style="margin:0 0 8px">NotePlan for Windows v0.5.5</p>
+    wrap.innerHTML = `<p style="margin:0 0 8px">NotePlan for Windows v0.5.6</p>
       <p style="margin:0;color:var(--text-dim);font-size:12.5px">受 <a href="#" id="about-link" style="color:var(--accent)">NotePlan</a> 启发的开源桌面笔记应用。<br/>
       每日笔记 · Markdown · 任务 · 双向链接 · 命令面板<br/>
       数据就是磁盘上的纯文本文件。</p>
