@@ -204,6 +204,44 @@ NotePlan 笔记库/
 
 ## 打包发行
 
+### 代码签名与 SmartScreen
+
+安装/首次运行时出现「Microsoft Defender SmartScreen 阻止了无法识别的应用启动…
+发行者：发布者未知」，原因是安装包**没有代码签名证书**。本仓库是个人学习项目，
+未购买商业证书；消除或绕过的方式如下：
+
+**临时绕过（不推荐长期依赖）**
+
+- 在 SmartScreen 弹窗点「更多信息」→「仍要运行」；
+- 或右键安装包 → 属性 → 勾选「解除锁定」→ 确定（PowerShell：`Unblock-File .\安装包.exe`）。
+
+**正式签名（购买证书后）**
+
+| 方式 | 大致成本 | 效果 |
+| --- | --- | --- |
+| OV 代码签名证书（DigiCert / Sectigo / SSL.com 等） | 约 $200+/年 | 显示发行者；SmartScreen 信誉需积累一段时间 |
+| EV 代码签名证书 | 约 $300+/年，硬件/云令牌 | 立即获得 SmartScreen 信誉 |
+| Azure Trusted Signing（微软官方） | $9.99/月 | 需身份验证（个人/组织），即时信誉 |
+| 自签名证书 | 免费 | **不能**消除 SmartScreen 警告，仅适合本机/内网测试 |
+
+拿到证书后，Electron 打包走环境变量即可自动签名（electron-builder 原生支持）：
+
+```bat
+set CSC_LINK=D:\certs\codesign.pfx
+set CSC_KEY_PASSWORD=证书密码
+npm run dist
+```
+
+或手动对已产出的 exe 签名（带时间戳，过期后仍有效）：
+
+```bat
+signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 ^
+  /f codesign.pfx /p 证书密码 "NotePlan-for-Windows-Setup-x.y.z.exe"
+```
+
+Tauri 侧在 `tauri.conf.json` 的 `bundle.windows` 中配置 `certificateThumbprint`
+（证书装入本机证书库后按指纹签名），或打包后用同样的 signtool 命令补签。
+
 ### GitHub Actions 自动打包
 
 仓库内置 `.github/workflows/build.yml`：
@@ -304,6 +342,17 @@ NotePlan/
 - [ ] 拖拽移动笔记到文件夹
 - [ ] 多笔记库窗口
 
+## 免责声明
+
+- 本项目为**个人学习性质的非商业开源实现**，与 NotePlan.app 及其开发方
+  [Modum B.V.](https://noteplan.co) 无任何隶属、授权或合作关系；NotePlan 名称归其权利人所有。
+- 软件按「现状」提供，**不附带任何明示或默示的担保**。作者不对使用本软件造成的任何
+  数据丢失、文件损坏、同步冲突或其他直接/间接损失承担责任——你的笔记库是普通文件夹，
+  请**定期自行备份**（纳入 Git / 网盘同步均可）。
+- 安装包请**仅从本仓库的 GitHub Releases 页面获取**，谨防第三方仿冒分发。
+- 应用未做商业代码签名，首次运行可能触发 SmartScreen 提示，见上文
+  「代码签名与 SmartScreen」。
+
 ## 许可
 
-MIT。NotePlan 是 NotePlan.app 的商标，本项目与其无隶属关系，仅为个人学习性质的同类功能实现。
+MIT。

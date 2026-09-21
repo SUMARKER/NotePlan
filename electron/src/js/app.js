@@ -2656,69 +2656,81 @@
 
   function helpModal() {
     const wrap = document.createElement('div');
-    wrap.innerHTML = `
-      <h4>界面布局</h4>
-      <div style="color:var(--text-dim);font-size:12.5px;line-height:1.7">
-        顶部在 笔记 / 周计划 / 月历 / 年 之间切换主视图；<br/>
-        右栏「月历 + 当日日程」仅在 笔记 视图展示，其余视图自动隐藏铺满；<br/>
-        每日笔记正文顶部显示所属周（WEEK nn），点击打开本周周计划；<br/>
-        右栏日程：点击月历日期切换当天安排，双击打开当日笔记；<br/>
-        all-day 列出当天无时间任务（可直接勾选），时间段任务定位到下方时间轴。
-      </div>
-      <h4>任务与时间</h4>
-      <table class="help-table">
-        <tr><td><code>- [ ] 任务</code></td><td>创建待办；视图即编辑器，可直接点复选框勾选</td></tr>
-        <tr><td><code>- [x] 已完成</code> / <code>- [-] 已废弃</code></td><td>完成 / 废弃任务（右键任务行也可标记废弃）</td></tr>
-        <tr><td><code>&gt;2026-09-01</code></td><td>安排到某天；输入 &gt; 可补全日期</td></tr>
-        <tr><td><code>14:00-15:30 内容</code></td><td>时间段任务：进入右栏当日时间轴（支持单个 14:00，不跨天）</td></tr>
-        <tr><td><code>@done(日期)</code></td><td>勾选任务时自动添加，取消勾选自动移除</td></tr>
-        <tr><td><code>every day / 每天 / 每2周</code></td><td>循环任务：完成时自动排到下一周期</td></tr>
-        <tr><td><code>提醒</code></td><td>带时间的任务在开始前提醒（默认 15 分钟）；当天 / 未排期 / 过期任务在每日提醒时间（默认 17:00）汇总提醒；设置 → 任务提醒 可配置</td></tr>
-        <tr><td><code>选中文字</code></td><td>右键 → 转为待办任务 / 添加为今日待办</td></tr>
-      </table>
-      <h4>书写语法</h4>
-      <table class="help-table">
-        <tr><td><code>[[笔记标题]]</code></td><td>双向链接（输入 [[ 自动补全笔记名）</td></tr>
-        <tr><td><code>#标签</code></td><td>标签（输入 # 自动补全）</td></tr>
-        <tr><td><code>@提及</code></td><td>提及（输入 @ 自动补全）</td></tr>
-        <tr><td><code>&gt; 引用行</code></td><td>引用块；缩进的引用可作为任务备注</td></tr>
-        <tr><td><code>==高亮==</code> <code>%%注释%%</code></td><td>高亮 / 注释</td></tr>
-        <tr><td><code>**粗体**</code> <code>*斜体*</code> <code>\`代码\`</code></td><td>基础格式</td></tr>
-      </table>
-      <h4>快捷键</h4>
-      <table class="help-table">
-        <tr><td><kbd>Ctrl</kbd>+<kbd>K</kbd></td><td>命令面板 / 快速打开 / 搜索</td></tr>
-        <tr><td><kbd>Ctrl</kbd>+<kbd>N</kbd></td><td>新建笔记</td></tr>
-        <tr><td><kbd>Ctrl</kbd>+<kbd>J</kbd></td><td>打开今日笔记</td></tr>
-        <tr><td><kbd>Ctrl</kbd>+<kbd>L</kbd></td><td>切换当前行任务（自动 @done / 循环重建）</td></tr>
-        <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>笔记内搜索</td></tr>
-        <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>撤销（编辑器内）</td></tr>
-        <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd></td><td>切换主题</td></tr>
-        <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>立即保存（默认自动保存）</td></tr>
-        <tr><td><kbd>F2</kbd></td><td>重命名当前笔记</td></tr>
-        <tr><td><kbd>Tab</kbd> / <kbd>Shift+Tab</kbd></td><td>缩进 / 反缩进</td></tr>
-      </table>
-      <h4>日历与节假日</h4>
-      <div style="color:var(--text-dim);font-size:12.5px;line-height:1.7">
-        日历日期旁：<span style="color:var(--danger);font-weight:600">红点</span> = 中国大陆法定节假日（休），<br/>
-        <span style="color:var(--accent);font-weight:600">蓝点</span> = 调休上班日；月历格与日程头部显示假期名；<br/>
-        月历 CW 列为 ISO 周数（橙色，点击打开周计划）；内置 2024–2026 年官方数据，<br/>
-        浏览其它年份时自动从 holiday-cn 拉取并本地缓存（可在设置中关闭）。
-      </div>
-      <h4>任务总览与拖拽排期</h4>
-      <div style="color:var(--text-dim);font-size:12.5px;line-height:1.7">
-        右栏「任务」面板按 今天 / 已过期 / 已排期 / 未排期 / 已完成 分组展示全库任务；<br/>
-        把任务拖到周条或月历某天上即可改期，点周条日期打开当天笔记。
-      </div>`;
+    const sec = (title, body, open) =>
+      `<details class="help-details"${open ? ' open' : ''}><summary>${title}</summary><div class="help-body">${body}</div></details>`;
+    wrap.innerHTML =
+      sec('界面布局', `
+        <div style="color:var(--text-dim);font-size:12.5px;line-height:1.7">
+          顶部在 笔记 / 周计划 / 月历 / 年 之间切换主视图；<br/>
+          右栏「月历 + 当日日程」仅在 笔记 视图展示，其余视图自动隐藏铺满；<br/>
+          每日笔记正文顶部显示所属周（WEEK nn），点击打开本周周计划；<br/>
+          右栏日程：点击月历日期切换当天安排，双击打开当日笔记；<br/>
+          all-day 列出当天无时间任务（可直接勾选），时间段任务定位到下方时间轴。
+        </div>`, true) +
+      sec('任务与时间', `
+        <table class="help-table">
+          <tr><td><code>- [ ] 任务</code></td><td>创建待办；视图即编辑器，可直接点复选框勾选</td></tr>
+          <tr><td><code>- [x] 已完成</code> / <code>- [-] 已废弃</code></td><td>完成 / 废弃任务（右键任务行也可标记废弃）</td></tr>
+          <tr><td><code>&gt;2026-09-01</code></td><td>安排到某天；输入 &gt; 可补全日期</td></tr>
+          <tr><td><code>14:00-15:30 内容</code></td><td>时间段任务：进入右栏当日时间轴（支持单个 14:00，不跨天）</td></tr>
+          <tr><td><code>@done(日期)</code></td><td>勾选任务时自动添加，取消勾选自动移除</td></tr>
+          <tr><td><code>every day / 每天 / 每2周</code></td><td>循环任务：完成时自动排到下一周期</td></tr>
+          <tr><td><code>提醒</code></td><td>带时间的任务在开始前提醒（默认 15 分钟）；当天 / 未排期 / 过期任务在每日提醒时间（默认 17:00）汇总提醒；设置 → 任务提醒 可配置</td></tr>
+          <tr><td><code>选中文字</code></td><td>右键 → 转为待办任务 / 添加为今日待办</td></tr>
+        </table>`) +
+      sec('书写语法', `
+        <table class="help-table">
+          <tr><td><code>[[笔记标题]]</code></td><td>双向链接（输入 [[ 自动补全笔记名）</td></tr>
+          <tr><td><code>#标签</code></td><td>标签（输入 # 自动补全）</td></tr>
+          <tr><td><code>@提及</code></td><td>提及（输入 @ 自动补全）</td></tr>
+          <tr><td><code>&gt; 引用行</code></td><td>引用块；缩进的引用可作为任务备注</td></tr>
+          <tr><td><code>==高亮==</code> <code>%%注释%%</code></td><td>高亮 / 注释</td></tr>
+          <tr><td><code>**粗体**</code> <code>*斜体*</code> <code>\`代码\`</code></td><td>基础格式</td></tr>
+        </table>`) +
+      sec('快捷键', `
+        <table class="help-table">
+          <tr><td><kbd>Ctrl</kbd>+<kbd>K</kbd></td><td>命令面板 / 快速打开 / 搜索</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>N</kbd></td><td>新建笔记</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>J</kbd></td><td>打开今日笔记</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>L</kbd></td><td>切换当前行任务（自动 @done / 循环重建）</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>笔记内搜索</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>撤销（编辑器内）</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd></td><td>切换主题</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>立即保存（默认自动保存）</td></tr>
+          <tr><td><kbd>F2</kbd></td><td>重命名当前笔记</td></tr>
+          <tr><td><kbd>Tab</kbd> / <kbd>Shift+Tab</kbd></td><td>缩进 / 反缩进</td></tr>
+        </table>`) +
+      sec('日历与节假日', `
+        <div style="color:var(--text-dim);font-size:12.5px;line-height:1.7">
+          日历日期旁：<span style="color:var(--danger);font-weight:600">红点</span> = 中国大陆法定节假日（休），<br/>
+          <span style="color:var(--accent);font-weight:600">蓝点</span> = 调休上班日；月历格与日程头部显示假期名；<br/>
+          月历 CW 列为 ISO 周数（橙色，点击打开周计划）；内置 2024–2026 年官方数据，<br/>
+          浏览其它年份时自动从 holiday-cn 拉取并本地缓存（可在设置中关闭）。
+        </div>`) +
+      sec('任务总览与拖拽排期', `
+        <div style="color:var(--text-dim);font-size:12.5px;line-height:1.7">
+          右栏「任务」面板按 今天 / 已过期 / 已排期 / 未排期 / 已完成 分组展示全库任务；<br/>
+          把任务拖到周条或月历某天上即可改期，点周条日期打开当天笔记。
+        </div>`) +
+      sec('免责声明', `
+        <div>
+          本项目为个人学习性质的非商业开源实现，与 NotePlan.app 及其开发方无任何隶属关系；<br/>
+          软件按「现状」提供，不附带任何明示或默示的担保，作者不对使用本软件造成的任何<br/>
+          数据丢失、文件损坏或其他损失承担责任——请定期自行备份笔记库文件夹；<br/>
+          安装包请仅从本仓库的 GitHub Releases 页面获取，谨防第三方仿冒分发；<br/>
+          应用未做商业代码签名，首次运行可能触发 SmartScreen 提示，详见 README「代码签名与 SmartScreen」。
+        </div>`, false);
+    wrap.lastElementChild.classList.add('disclaimer');
     showModal('帮助', wrap, [{ label: '关闭', kind: 'primary' }]);
   }
 
   function aboutModal() {
     const wrap = document.createElement('div');
-    wrap.innerHTML = `<p style="margin:0 0 8px">NotePlan for Windows v0.5.0</p>
+    wrap.innerHTML = `<p style="margin:0 0 8px">NotePlan for Windows v0.5.1</p>
       <p style="margin:0;color:var(--text-dim);font-size:12.5px">受 <a href="#" id="about-link" style="color:var(--accent)">NotePlan</a> 启发的开源桌面笔记应用。<br/>
       每日笔记 · Markdown · 任务 · 双向链接 · 命令面板<br/>
-      数据就是磁盘上的纯文本文件。</p>`;
+      数据就是磁盘上的纯文本文件。</p>
+      <p style="margin:8px 0 0;color:var(--text-faint);font-size:11.5px">仅供个人学习使用，与 NotePlan.app 无隶属关系；数据请自行备份。</p>`;
     showModal('关于', wrap, [{ label: '关闭', kind: 'primary' }]);
     wrap.querySelector('#about-link').onclick = (e) => {
       e.preventDefault();
