@@ -7,7 +7,6 @@
   const $ = (sel) => document.querySelector(sel);
 
   const editor = $('#editor');        // textarea 兜底（CodeMirror 未构建时使用）
-  const preview = $('#preview');
   const editorWrap = $('#editor-wrap');
 
   let Ed = null; // 编辑器适配器（CodeMirror 或 textarea）
@@ -24,14 +23,15 @@
     outline: [],
     calMonth: null,         // Date（当月任意一天）
     sidebarTab: 'calendar',
-    viewMode: 'edit',
     collapsed: new Set(),
     externalDirty: false,    // 当前笔记被外部改动且本地有未保存修改（离开时确认）
     paletteSeq: 0,
     renderGen: 0,
     taskIndex: [],          // 全库任务索引
     weekStart: null,        // 周条起始日（周一）
-    rightTab: 'outline',
+    rightTab: 'agenda',
+    raSel: null,            // 右栏日程选中的日期
+    raGen: 0,               // 日程异步渲染代数
     tagsCache: [],
     mentionsCache: [],
     suppressDocEvent: false,
@@ -161,6 +161,7 @@
   async function boot() {
     state.settings = Object.assign(state.settings, await window.api.getSettings());
     state.calMonth = new Date();
+    state.raSel = todayStr();
     // 本周周一
     const now = new Date();
     const dow = (now.getDay() + 6) % 7;
@@ -218,17 +219,23 @@
     renderTree();
   }
 
-  /* ---- 日历 ---- */
+  /* ---- 日历（右侧面板：月历 + 当日安排） ---- */
 
   function renderCalendar() {
     const y = state.calMonth.getFullYear();
     const m = state.calMonth.getMonth();
     ensureHolYears([y, y + 1]); // 当年 + 次年（次年安排每年 11 月公布）
+    $('#rb-cal-title').textContent = `${y}年${m + 1}月`;
     $('#cal-title').textContent = `${y}年${m + 1}月`;
 
-    const grid = $('#cal-grid');
+    const grid = $('#rb-cal-grid');
     grid.innerHTML = '';
 
+    // CW 周数列（橙色）+ 星期表头（周日开头）
+    const cwHead = document.createElement('div');
+    cwHead.className = 'cal-cw cal-cw-head';
+    cwHead.textContent = 'CW';
+    grid.appendChild(cwHead);
     for (const [wi, w] of ['日', '一', '二', '三', '四', '五', '六'].entries()) {
       const wd = document.createElement('div');
       wd.className = 'cal-weekday' + ((wi === 0 || wi === 6) ? ' wk-end' : '');
@@ -240,13 +247,19 @@
     const offset = first.getDay(); // 周日开头
     const daysInMonth = new Date(y, m + 1, 0).getDate();
     const today = todayStr();
-    const selected = state.current && state.current.dateStr;
+    const selected = state.raSel;
+    const curNote = state.current && state.current.dateStr;
 
+    let cellInWeek = 0;
+    // 第一行：先插 CW，再补月初空位（保持 8 列网格对齐）
+    if (offset > 0) grid.appendChild(cwCell(y, m, 1));
     for (let i = 0; i < offset; i++) {
       const e = document.createElement('div');
       e.className = 'cal-day empty';
       grid.appendChild(e);
+      cellInWeek++;
     }
+
     for (let d = 1; d <= daysInMonth; d++) {
       const ds = `${y}-${pad2(m + 1)}-${pad2(d)}`;
       const hol = holOf(ds);
@@ -254,23 +267,217 @@
       e.className = 'cal-day';
       e.textContent = d;
       if (hol) {
-        e.classList.add(hol.off ? 'holiday' : 'workday');
-        const tag = document.createElement('span');
-        tag.className = 'hol-tag';
-        tag.textContent = hol.off ? '休' : '班';
-        e.appendChild(tag);
+        const dot = document.createElement('span');
+        dot.className = 'hol-dot ' + (hol.off ? 'off' : 'work');
+        e.appendChild(dot);
       }
-      e.title = ds + weekdayCN(ds) + holTitle(ds) + (lunarFull(y, m + 1, d) ? ' · ' + lunarFull(y, m + 1, d) : '');
+      e.title = ds + weekdayCN(ds) + holTitle(ds) + (lunarFull(y, m + 1, d) ? ' · ' + lunarFull(y, m + 1, d) : '') +
+        '（点击查看当天安排，双击打开每日笔记）';
       if (ds === today) e.classList.add('today');
       if (selected === ds) e.classList.add('selected');
+      if (curNote === ds) e.classList.add('cur-note');
       if (dayHasContent(ds)) {
         const dot = document.createElement('div');
         dot.className = 'dot';
         e.appendChild(dot);
       }
-      e.onclick = () => openDaily(ds);
+      e.onclick = () => {
+        state.raSel = ds;
+        renderCalendar();
+        renderAgenda();
+      };
+      e.ondblclick = () => openDaily(ds);
       grid.appendChild(e);
+      cellInWeek++;
+      // 每行第 3 天之后是行尾：插入下一行的 CW
+      if (cellInWeek % 7 === 0 && d < daysInMonth) grid.appendChild(cwCell(y, m, d + 4));
     }
+    // 补齐最后一行空位（保持网格对齐）
+    const rest = cellInWeek % 7;
+    if (rest) for (let i = rest; i < 7; i++) grid.appendChild(Object.assign(document.createElement('div'), { className: 'cal-day empty' }));
+  }
+
+  /** CW 周数单元格：ds 为该周内任一日期字符串 */
+  function cwCell(y, m, day) {
+    const ds = `${y}-${pad2(m + 1)}-${pad2(day)}`;
+    const info = isoWeekInfo(new Date(ds + 'T12:00:00'));
+    const c = document.createElement('div');
+    c.className = 'cal-cw';
+    c.textContent = info.week;
+    c.title = `第 ${info.week} 周 · 点击打开周计划`;
+    c.onclick = () => {
+      const d = new Date(ds + 'T12:00:00');
+      state.wpWeekStart = startOfWeek(d);
+      setMainView('week');
+    };
+    return c;
+  }
+
+  /* ---- 当日安排（右栏：all-day + 时间轴） ---- */
+
+  const RA_HOUR_H = 44; // 时间轴每小时像素高
+
+  async function renderAgenda() {
+    const tl = $('#ra-timeline');
+    if (!tl) return;
+    const ds = state.raSel || todayStr();
+    const gen = ++state.raGen;
+    const [, m, d] = ds.split('-').map(Number);
+    const hol = holOf(ds);
+
+    $('#ra-date').textContent = `${m}月${d}日 ${weekdayCN(ds)}`;
+    const holEl = $('#ra-hol');
+    if (hol) {
+      holEl.hidden = false;
+      holEl.className = 'ra-hol ' + (hol.off ? 'off' : 'work');
+      holEl.textContent = hol.off ? `${hol.name}·休` : `调休·班`;
+    } else {
+      holEl.hidden = true;
+    }
+
+    // 任务（含周期展开 / 连续区间）；每日笔记里的任务隐式属于当天
+    const dailyRel = `Calendar/${ds}.md`;
+    const tasks = state.taskIndex.filter((t) => taskOccursOn(t, ds) || t.rel === dailyRel);
+    const events = await loadCalEvents(ds, ds);
+    if (gen !== state.raGen) return; // 异步期间已切换日期
+
+    const dayTasks = tasks.map((t) => ({ t, tm: parseTaskTime(t.text) }));
+    const timedTasks = dayTasks.filter(({ tm }) => tm && tm.start)
+      .map(({ t, tm }) => ({
+        rel: t.rel, line: t.line, text: t.text, done: t.done,
+        title: t.title || t.name, start: tm.start, end: tm.end || addHourHM(tm.start),
+      }));
+    const alldayTasks = dayTasks.filter(({ tm }) => !tm || !tm.start);
+    const alldayEv = events.filter((e) => e.allDay);
+    const timedEv = events.filter((e) => !e.allDay && e.startHM)
+      .map((e) => ({ ev: e, start: e.startHM, end: e.endHM || addHourHM(e.startHM) }));
+
+    // all-day 区
+    const al = $('#ra-allday-list');
+    al.innerHTML = '';
+    for (const e of alldayEv) {
+      const row = document.createElement('div');
+      row.className = 'ra-row ev';
+      row.innerHTML = `<span class="ra-dot ev-c${e.cal % EV_COLORS.length}"></span><span class="ra-text">${escapeHtml(e.title)}</span>`;
+      al.appendChild(row);
+    }
+    for (const { t } of alldayTasks) {
+      const row = document.createElement('div');
+      row.className = 'ra-row task' + (t.done ? ' done' : '');
+      row.innerHTML = `<input type="checkbox" class="task-box"${t.done ? ' checked' : ''}>` +
+        `<span class="ra-text">${escapeHtml(cleanTaskText(t.text))}</span>` +
+        (t.rel === dailyRel ? '' : `<span class="ra-src">${escapeHtml(t.title || t.name)}</span>`);
+      row.title = `${t.rel} 第 ${t.line} 行`;
+      row.querySelector('.task-box').addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleTaskInFile(t.rel, t.line);
+      });
+      row.addEventListener('click', () => openNote(t.rel, { line: t.line }));
+      al.appendChild(row);
+    }
+    if (!alldayEv.length && !alldayTasks.length) al.innerHTML = '<div class="ra-none">没有全天安排</div>';
+
+    // 时间轴范围：默认 08:00–20:00，按内容自动扩展（不跨天）
+    let lo = 8 * 60, hi = 20 * 60;
+    for (const b of timedTasks) { lo = Math.min(lo, hmToMin(b.start)); hi = Math.max(hi, hmToMin(b.end)); }
+    for (const b of timedEv) { lo = Math.min(lo, hmToMin(b.start)); hi = Math.max(hi, hmToMin(b.end)); }
+    lo = Math.max(0, Math.floor(lo / 60) * 60);
+    hi = Math.min(24 * 60, Math.ceil(hi / 60) * 60);
+    const totalMin = hi - lo;
+
+    tl.innerHTML = '';
+    const grid = document.createElement('div');
+    grid.className = 'ra-tl-grid';
+    grid.style.height = (totalMin / 60) * RA_HOUR_H + 'px';
+    for (let mins = lo; mins <= hi; mins += 60) {
+      const hour = document.createElement('div');
+      hour.className = 'ra-hour';
+      hour.style.top = ((mins - lo) / 60) * RA_HOUR_H + 'px';
+      hour.innerHTML = `<span class="ra-hour-label">${pad2(mins / 60)}:00</span>`;
+      grid.appendChild(hour);
+    }
+
+    const blocks = [];
+    for (const b of timedEv) blocks.push({ kind: 'ev', ...b });
+    for (const b of timedTasks) blocks.push({ kind: 'task', ...b });
+    blocks.sort((a, b) => hmToMin(a.start) - hmToMin(b.start) || hmToMin(a.end) - hmToMin(b.end));
+    layoutLanes(blocks);
+
+    for (const b of blocks) {
+      const top = ((hmToMin(b.start) - lo) / 60) * RA_HOUR_H;
+      const bottom = ((hmToMin(b.end) - lo) / 60) * RA_HOUR_H;
+      const el = document.createElement('div');
+      el.className = b.kind === 'ev'
+        ? 'ra-block ev ev-c' + (b.ev.cal % EV_COLORS.length)
+        : 'ra-block task' + (b.done ? ' done' : '');
+      el.style.top = top + 'px';
+      el.style.height = Math.max(20, bottom - top - 2) + 'px';
+      el.style.left = `calc(${(b.lane / b.lanes) * 100}% + 4px)`;
+      el.style.width = `calc(${100 / b.lanes}% - 8px)`;
+      if (b.kind === 'ev') {
+        el.innerHTML = `<span class="ra-b-time">${b.start}</span><span class="ra-b-title">${escapeHtml(b.ev.title)}</span>`;
+        el.title = `${b.start}-${b.end} ${b.ev.title}`;
+      } else {
+        el.innerHTML = `<span class="ra-b-time">${b.start}</span><input type="checkbox" class="task-box"${b.done ? ' checked' : ''}>` +
+          `<span class="ra-b-title">${escapeHtml(cleanTaskText(b.text))}</span>`;
+        el.title = `${b.start}-${b.end} ${cleanTaskText(b.text)}（来源：${b.title}）`;
+        el.querySelector('.task-box').addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleTaskInFile(b.rel, b.line);
+        });
+        el.addEventListener('click', () => openNote(b.rel, { line: b.line }));
+      }
+      grid.appendChild(el);
+    }
+    tl.appendChild(grid);
+    if (!blocks.length) {
+      const empty = document.createElement('div');
+      empty.className = 'ra-none';
+      empty.textContent = '这一天没有时间块 · 任务写「14:00-15:30 内容」自动上图';
+      tl.appendChild(empty);
+    }
+  }
+
+  /** 重叠时间块的泳道分列：同一 cluster 内并排显示 */
+  function layoutLanes(blocks) {
+    let cluster = [];
+    let clusterEnd = -1;
+    const flush = () => {
+      const lanes = cluster.reduce((mx, b) => Math.max(mx, b.lane + 1), 1);
+      for (const b of cluster) b.lanes = lanes;
+      cluster = [];
+      clusterEnd = -1;
+    };
+    for (const b of blocks) {
+      const s = hmToMin(b.start), e = hmToMin(b.end);
+      if (cluster.length && s >= clusterEnd) flush();
+      const used = new Set(cluster.filter((x) => hmToMin(x.end) > s).map((x) => x.lane));
+      let lane = 0;
+      while (used.has(lane)) lane++;
+      b.lane = lane;
+      cluster.push(b);
+      clusterEnd = Math.max(clusterEnd, e);
+    }
+    flush();
+  }
+
+  /* ---- 周数行（每日笔记正文最上方） ---- */
+
+  function updateWeekRow() {
+    const row = $('#weekrow');
+    if (!row) return;
+    const show = state.mainView === 'notes' && state.current && state.current.isDaily;
+    row.hidden = !show;
+    if (!show) return;
+    const d = new Date(state.current.dateStr + 'T12:00:00');
+    const info = isoWeekInfo(d);
+    $('#wr-label').textContent = 'WEEK ' + info.week;
+    const s = startOfWeek(d);
+    const e = new Date(s);
+    e.setDate(e.getDate() + 6);
+    $('#wr-range').textContent = `${s.getMonth() + 1}/${s.getDate()} – ${e.getMonth() + 1}/${e.getDate()}`;
   }
 
   function renderDailyList() {
@@ -455,7 +662,12 @@
     state.externalDirty = false;
 
     setCrumb(rel);
-    setView(state.viewMode, { skipFocus: true });
+    if (daily) {
+      state.raSel = state.current.dateStr;
+      renderCalendar();
+      renderAgenda();
+    }
+    updateWeekRow();
     refreshPreview();
     refreshOutline();
     refreshBacklinks();
@@ -610,42 +822,21 @@
   }
 
   /* ======================================================================
-   * 预览 / 大纲 / 反向链接
+   * 派生刷新：大纲（Live Preview 即视图，无需独立预览层）
    * ==================================================================== */
 
   function refreshPreview() {
     if (!state.current) return;
     const gen = ++state.renderGen;
-    const { html, outline } = window.NPMarkdown.render(Ed.get(), {
+    const { outline } = window.NPMarkdown.render(Ed.get(), {
       noteDir: relDir(state.current.rel),
     });
     state.outline = outline;
-    if (state.viewMode !== 'edit') preview.innerHTML = html;
-    appendAgenda(gen);
+    if (gen === state.renderGen) refreshOutline();
   }
 
-  /* 每日笔记：聚合显示其它笔记里安排到这一天的任务（>日期） */
-  async function appendAgenda(gen) {
-    const cur = state.current;
-    if (!cur || !cur.isDaily) return;
-    const tasks = await window.api.scheduledTasks(cur.dateStr);
-    // 异步期间用户可能已切走或已触发新一轮渲染
-    if (gen !== state.renderGen || state.current !== cur) return;
-    if (!tasks.length) return;
-    if (state.viewMode === 'edit') return;
-
-    const items = tasks.map((t) => {
-      const n = state.byRel.get(t.rel);
-      const plain = t.text.replace(/^[-*+]\s*\[[ xX]\]\s*/, '');
-      const body = window.NPMarkdown.inline(plain, { codes: [], noteDir: relDir(t.rel) });
-      return `<li class="task${t.done ? ' done' : ''}" data-rel="${escapeHtml(t.rel)}">` +
-        `<input type="checkbox" class="task-box" disabled${t.done ? ' checked' : ''}>` +
-        `<span class="task-body">${body}</span>` +
-        `<a class="agenda-src">↩ ${escapeHtml(noteTitle(n))}</a></li>`;
-    });
-    const box = `<div class="agenda-box"><div class="agenda-title">📌 来自其它笔记 · 安排到这一天</div>` +
-      `<ul class="agenda">${items.join('')}</ul></div>`;
-    preview.insertAdjacentHTML('beforeend', box);
+  function jumpToLine(line) {
+    Ed.revealLine(line);
   }
 
   function refreshOutline() {
@@ -684,38 +875,6 @@
       box.appendChild(b);
     }
   }
-
-  function jumpToLine(line) {
-    if (state.viewMode === 'preview') {
-      const h = preview.querySelector(`#h-${line}`);
-      if (h) h.scrollIntoView({ block: 'start', behavior: 'smooth' });
-      return;
-    }
-    Ed.revealLine(line);
-  }
-
-  /* ---- 预览交互 ---- */
-
-  preview.addEventListener('click', (e) => {
-    const t = e.target;
-
-    if (t.classList && t.classList.contains('task-box')) {
-      const line = +t.dataset.line;
-      applyTaskToggle(line, t.checked);
-      return;
-    }
-    const wiki = t.closest && t.closest('a.wikilink');
-    if (wiki) { e.preventDefault(); openWiki(wiki.dataset.wiki); return; }
-    // 聚合任务：点击跳到来源笔记
-    const agendaItem = t.closest && t.closest('li.task[data-rel]');
-    if (agendaItem) { openNote(agendaItem.dataset.rel); return; }
-    const tag = t.closest && t.closest('a.tag');
-    if (tag) { e.preventDefault(); openPalette('#' + tag.dataset.tag); return; }
-    const sched = t.closest && t.closest('span.schedule');
-    if (sched) { e.preventDefault(); openDaily(sched.dataset.date); return; }
-    const ext = t.closest && t.closest('a.ext-link');
-    if (ext) { e.preventDefault(); window.api.openExternal(ext.href); return; }
-  });
 
   /* ======================================================================
    * 编辑器适配器：优先 CodeMirror 6（cm-bundle.js），否则回退 textarea
@@ -865,16 +1024,36 @@
     return false;
   }
 
-  /** 切换一行任务文本的完成状态；返回 {line, done, rest}，非任务行返回 null */
+  /** 切换一行任务文本的完成状态；返回 {line, done, rest}，非任务行返回 null。
+   *  勾选标记：' ' 待办 / 'x' 完成 / '-' 废弃（废弃不进任务统计） */
   function composeToggledLine(lineText, target) {
-    const m = lineText.match(/^(\s*)([-*+]\s+)(\[([ xX])\]\s*)?(.*)$/);
+    const m = lineText.match(/^(\s*)([-*+]\s+)(\[([ xX-])\]\s*)?(.*)$/);
     if (!m) return null;
     const indent = m[1], marker = m[2], box = m[4], rest = m[5] || '';
-    const curDone = (box !== undefined && box !== ' ') || /@done/i.test(rest);
-    const done = target === null ? !curDone : target;
+    const curCancelled = box === '-';
+    const curDone = (box !== undefined && box !== ' ' && box !== '-') || /@done/i.test(rest);
+    // target=null：待办→完成；完成/废弃→待办
+    const done = target === null ? (!curDone && !curCancelled) : !!target;
     let text = rest.replace(/\s*@done(?:\([^)]*\))?/gi, '').replace(/\s+$/, '');
     if (done) text += ` @done(${todayStr()})`;
     return { line: `${indent}${marker}${done ? '[x] ' : '[ ] '}${text}`, done, rest };
+  }
+
+  /** 标记 / 取消废弃任务（[-]）。废弃任务仅作记录，不计入待办统计 */
+  function applyTaskCancel(lineNo, cancel) {
+    const lineText = Ed.getLine(lineNo);
+    if (lineText == null) return;
+    const m = lineText.match(/^(\s*)([-*+]\s+)(\[([ xX-])\]\s*)?(.*)$/);
+    if (!m) return;
+    const text = (m[5] || '').replace(/\s*@done(?:\([^)]*\))?/gi, '').replace(/\s+$/, '');
+    const line = cancel
+      ? `${m[1]}${m[2]}[-] ${text}`
+      : `${m[1]}${m[2]}[ ] ${text}`;
+    Ed.replaceLine(lineNo, line);
+    markDirty();
+    refreshPreview();
+    saveNow(true);
+    scheduleTaskIndexRefresh();
   }
 
   /** 循环任务：完成时在下一个周期日期的每日笔记里重建 */
@@ -970,7 +1149,7 @@
     scheduleTaskIndexRefresh();
   }
 
-  /** 编辑器/预览里选中内容右键 → 快速生成待办；无选区时用浏览器默认菜单 */
+  /** 编辑器里选中内容右键 → 快速生成待办；光标停在任务行上 → 任务操作菜单 */
   function selectionContext(ev) {
     if (overlayOpen() || !Ed) return;
     const t = ev.target;
@@ -982,11 +1161,25 @@
     } else if (t === editor) {
       text = editor.value.slice(editor.selectionStart, editor.selectionEnd);
       inEditor = true;
-    } else if (t.closest && t.closest('#preview')) {
-      text = String(window.getSelection() || '');
     }
-    if (!text.trim()) return;
+    if (!inEditor) return; // 非编辑区（如月历）使用浏览器默认菜单
     ev.preventDefault();
+    if (!text.trim()) {
+      // 无选区：光标所在行是任务 → 任务操作菜单（完成 / 废弃）
+      const lines = Ed.cursorLines();
+      if (lines.length !== 1) return;
+      const lineText = Ed.getLine(lines[0]) || '';
+      if (/^\s*[-*+]\s+\[([ xX-])\]/.test(lineText)) {
+        const cancelled = /^\s*[-*+]\s+\[-\]/.test(lineText);
+        showCtx(ev.clientX, ev.clientY, [
+          { label: '切换完成 / 未完成', key: 'Ctrl+L', onClick: () => applyTaskToggle(lines[0]) },
+          cancelled
+            ? { label: '取消废弃（恢复为待办）', onClick: () => applyTaskCancel(lines[0], false) }
+            : { label: '标记为废弃任务', onClick: () => applyTaskCancel(lines[0], true) },
+        ]);
+      }
+      return;
+    }
     const items = [];
     if (inEditor) items.push({ label: '转为待办任务', key: 'Ctrl+L', onClick: () => convertSelectionToTasks() });
     items.push({ label: '添加为今日待办', onClick: () => addSelectionToToday(text) });
@@ -1004,6 +1197,7 @@
     } catch (_) { return; }
     renderWeekBar();
     if (state.rightTab === 'tasks') renderTasksPanel();
+    if (state.rightTab === 'agenda') renderAgenda();
     if (state.mainView === 'week') renderWeekPlan();
   }
   function scheduleTaskIndexRefresh() {
@@ -1036,8 +1230,8 @@
       const cell = document.createElement('div');
       cell.className = 'wb-day' + (ds === today ? ' today' : '') + (cur === ds ? ' selected' : '');
       cell.innerHTML = `<span class="wb-week">${WEEKDAYS[d.getDay()]}</span>` +
-        `<span class="wb-num">${d.getMonth() + 1}/${d.getDate()}</span>` +
-        (hol ? `<span class="wb-hol${hol.off ? '' : ' work'}">${hol.off ? hol.name : '班'}</span>` : '') +
+        `<span class="wb-num">${d.getMonth() + 1}/${d.getDate()}${hol ? `<span class="hol-dot ${hol.off ? 'off' : 'work'}"></span>` : ''}</span>` +
+        (hol && hol.off ? `<span class="wb-hol">${hol.name}</span>` : '') +
         (counts[ds] ? `<span class="wb-badge" title="当日待办">${counts[ds]}</span>` : '');
       cell.title = ds + weekdayCN(ds) + holTitle(ds) + '（点击打开每日笔记，可拖入任务改期）';
       cell.onclick = () => openDaily(ds);
@@ -1156,10 +1350,10 @@
     const notes = mode === 'notes';
     const week = mode === 'week';
     $('#editor-wrap').hidden = !notes;
+    $('#weekrow').hidden = !(notes && state.current && state.current.isDaily);
     $('#weekbar').hidden = !notes;
     $('#calview').hidden = notes || week;
     $('#weekplan').hidden = !week;
-    $('#view-seg').style.display = notes ? '' : 'none';
     if (week) {
       if (!state.wpWeekStart) state.wpWeekStart = startOfWeek(new Date());
       loadTaskIndex().then(() => renderWeekPlan());
@@ -1212,6 +1406,7 @@
 
   function wpClean(text) {
     return (text || '').replace(/^[-*+]\s+\[[ xX]\]\s*/, '')
+      .replace(/^\d{1,2}:\d{2}(?:\s*(?:-|–|—|~|至|到)\s*\d{1,2}:\d{2})?\s*/, '')
       .replace(/\s*@\w+(?:\([^)]*\))?/gi, '')
       .replace(/>\s*\d{4}-\d{2}-\d{2}/g, '')
       .replace(/\s{2,}/g, ' ').trim();
@@ -1264,8 +1459,7 @@
       const list = dayLists[di].list;
       const hol = holOf(ds);
       head.innerHTML = `<span class="wp-day-week">${WEEKDAYS[d.getDay()]}</span>` +
-        `<span class="wp-day-date">${d.getMonth() + 1}/${d.getDate()}</span>` +
-        (hol ? `<span class="wp-day-hol${hol.off ? '' : ' work'}">${hol.off ? '休' : '班'}</span>` : '');
+        `<span class="wp-day-date">${d.getMonth() + 1}/${d.getDate()}${hol ? `<span class="hol-dot ${hol.off ? 'off' : 'work'}"></span>` : ''}</span>`;
       head.title = ds + holTitle(ds) + '（点击打开每日笔记）';
       head.onclick = () => openDaily(ds);
       cell.appendChild(head);
@@ -1289,9 +1483,10 @@
         body.appendChild(empty);
       }
       for (const t of list) {
+        const tm = parseTaskTime(t.text);
         const row = document.createElement('div');
         row.className = 'wp-task' + (t.done ? ' done' : '');
-        row.innerHTML = `<div class="wp-task-text">${t.start ? `<span class="wp-task-time">${t.start}-${t.end || ''}</span>` : ''}${t.recurring ? '🔁 ' : ''}${escapeHtml(wpClean(t.text))}` +
+        row.innerHTML = `<div class="wp-task-text">${tm && tm.start ? `<span class="wp-task-time">${tm.start}-${tm.end || addHourHM(tm.start)}</span>` : ''}${t.recurring ? '🔁 ' : ''}${escapeHtml(wpClean(t.text))}` +
           `<span class="wp-task-src">${escapeHtml(t.title || t.name)}</span></div>`;
         row.title = `${t.rel} 第 ${t.line} 行${t.done ? '' : '（可拖到其它天改期）'}`;
         row.addEventListener('click', () => openNote(t.rel, { line: t.line }));
@@ -1718,8 +1913,7 @@
 
       const head = document.createElement('div');
       head.className = 'mv-head';
-      head.innerHTML = `<span class="mv-date">${d.getMonth() + 1}/${d.getDate()}</span>` +
-        (hol && !hol.off ? '<span class="mv-hol work" title="调休上班">班</span>' : '') +
+      head.innerHTML = `<span class="mv-date">${d.getMonth() + 1}/${d.getDate()}${hol ? `<span class="hol-dot ${hol.off ? 'off' : 'work'}"></span>` : ''}</span>` +
         (dayHasContent(ds) ? '<span class="mv-note">📝</span>' : '');
       cell.appendChild(head);
       // 日期说明行：法定节假日名 > 农历节日 > 节气 > 农历日
@@ -1759,11 +1953,12 @@
       }
       for (const t of tks) {
         if (shown >= 4) break;
+        const tm = parseTaskTime(t.text);
         const c = document.createElement('div');
-        c.className = 'mv-chip tk' + (t.start ? ' timed' : '');
+        c.className = 'mv-chip tk' + ((tm && tm.start) ? ' timed' : '');
         c.draggable = true;
-        c.innerHTML = `${t.start ? `<b>${t.start}</b> ` : ''}${escapeHtml(cleanTaskText(t.text)).slice(0, 30)}`;
-        c.title = `${t.start ? t.start + '-' + t.end + ' ' : ''}${cleanTaskText(t.text)}（来源：${t.title}）`;
+        c.innerHTML = `${tm && tm.start ? `<b>${tm.start}</b> ` : ''}${escapeHtml(cleanTaskText(t.text)).slice(0, 30)}`;
+        c.title = `${tm && tm.start ? tm.start + '-' + (tm.end || addHourHM(tm.start)) + ' ' : ''}${cleanTaskText(t.text)}（来源：${t.title}）`;
         attachTaskDrag(c, t);
         items.appendChild(c);
         shown++;
@@ -1804,12 +1999,32 @@
   }
 
   function cleanTaskText(t) {
-    return t.replace(/^[-*+]\s+\[[ xX]\]\s*/, '')
+    return t.replace(/^[-*+]\s+\[[ xX-]\]\s*/, '')
       .replace(/\s*@\w+(?:\([^)]*\))?/gi, '')
       .replace(/>\s*\d{4}-\d{2}-\d{2}/g, '')
-      .replace(/\d{1,2}:\d{2}\s*(?:-|–|—|~|至|到)\s*\d{1,2}:\d{2}/, '')
+      .replace(/(?:^|\s)\d{1,2}:\d{2}(?:\s*(?:-|–|—|~|至|到)\s*\d{1,2}:\d{2})?/, '')
       .replace(/\s{2,}/g, ' ').trim();
   }
+
+  /** 任务行内的时间/时间段（渲染端解析，后端只认区间）：
+   *  '14:00' → {start:'14:00', end:null}；'14:00-15:30' → 两端都有。跨天不支持。 */
+  function parseTaskTime(text) {
+    const s = String(text || '')
+      .replace(/\s*@\w+(?:\([^)]*\))?/gi, '')   // @done(2026-09-21 09:12) 里的时间不算
+      .replace(/>\s*\d{4}-\d{2}-\d{2}/g, '');
+    const m = s.match(/(?:^|\s)(\d{1,2}:\d{2})(?:\s*(?:-|–|—|~|至|到)\s*(\d{1,2}:\d{2}))?/);
+    if (!m) return null;
+    return { start: normHM(m[1]), end: m[2] ? normHM(m[2]) : null };
+  }
+  function normHM(s) {
+    const [h, mi] = s.split(':').map((x) => pad2(parseInt(x, 10) || 0));
+    return `${h}:${mi}`;
+  }
+  function addHourHM(hm) {
+    const [h, mi] = hm.split(':').map(Number);
+    return `${pad2(Math.min(23, h + 1))}:${pad2(mi)}`;
+  }
+  const hmToMin = (hm) => { const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
 
   function attachTaskDrag(el, task) {
     el.addEventListener('dragstart', (ev) => {
@@ -1895,24 +2110,7 @@
    * 视图切换 / 面板
    * ==================================================================== */
 
-  function setView(mode, opts) {
-    opts = opts || {};
-    if (mode === 'split') mode = 'edit'; // 分栏视图已移除
-    state.viewMode = mode;
-    editorWrap.classList.remove('view-edit', 'view-split', 'view-preview');
-    editorWrap.classList.add('view-' + mode);
-    preview.hidden = mode === 'edit';
-    document.querySelectorAll('#view-seg button').forEach((b) => {
-      b.classList.toggle('active', b.dataset.view === mode);
-    });
-    if (mode !== 'edit') refreshPreview();
-    if (!opts.skipFocus && mode !== 'preview') editor.focus();
-  }
-
-  function cycleView() {
-    const order = ['edit', 'preview'];
-    setView(order[(order.indexOf(state.viewMode) + 1) % order.length]);
-  }
+  /* Live Preview 即唯一视图：编辑与渲染合一，不再有独立的编辑/预览切换 */
 
   /* ======================================================================
    * 命令面板
@@ -2104,7 +2302,6 @@
       if (tab) tab.click();
     } },
     { label: '切换深色 / 浅色主题', hint: 'Ctrl+Shift+L', icon: '🌓', run: () => toggleTheme() },
-    { label: '切换 编辑 / 预览', hint: 'Ctrl+E', icon: '▤', run: () => cycleView() },
     { label: '设置…', hint: 'Ctrl+,', icon: '⚙', run: () => settingsModal() },
     { label: '在资源管理器中打开笔记库', icon: '📂', run: () => window.api.showInFolder() },
     { label: '更换笔记库…', icon: '🗂', run: () => chooseVaultFlow() },
@@ -2296,10 +2493,12 @@
     wrap.innerHTML = `
       <h4>常用语法</h4>
       <table class="help-table">
-        <tr><td><code>- [ ] 任务</code></td><td>创建任务，编辑器/预览中可直接点复选框</td></tr>
+        <tr><td><code>- [ ] 任务</code></td><td>创建待办；视图即编辑器，可直接点复选框勾选</td></tr>
+        <tr><td><code>- [x] 已完成</code> / <code>- [-] 已废弃</code></td><td>完成 / 废弃任务（右键任务行也可标记废弃）</td></tr>
         <tr><td><code>[[笔记标题]]</code></td><td>双向链接（输入 [[ 自动补全笔记名）</td></tr>
         <tr><td><code>#标签</code></td><td>标签（输入 # 自动补全）</td></tr>
         <tr><td><code>&gt;2026-09-01</code></td><td>安排到某天；输入 &gt; 可补全日期</td></tr>
+        <tr><td><code>14:00-15:30 内容</code></td><td>时间段任务：自动进入右栏当日时间轴（支持单个 14:00）</td></tr>
         <tr><td><code>@done(日期)</code></td><td>勾选任务时自动添加，取消勾选自动移除</td></tr>
         <tr><td><code>every day / 每天 / 每2周</code></td><td>循环任务：完成时自动排到下一周期</td></tr>
         <tr><td><code>==高亮==</code> <code>%%注释%%</code></td><td>高亮 / 注释</td></tr>
@@ -2311,7 +2510,6 @@
         <tr><td><kbd>Ctrl</kbd>+<kbd>K</kbd></td><td>命令面板 / 快速打开 / 搜索</td></tr>
         <tr><td><kbd>Ctrl</kbd>+<kbd>N</kbd></td><td>新建笔记</td></tr>
         <tr><td><kbd>Ctrl</kbd>+<kbd>J</kbd></td><td>打开今日笔记</td></tr>
-        <tr><td><kbd>Ctrl</kbd>+<kbd>E</kbd></td><td>切换 编辑 / 预览</td></tr>
         <tr><td><kbd>Ctrl</kbd>+<kbd>L</kbd></td><td>切换当前行任务（自动 @done / 循环重建）</td></tr>
         <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>笔记内搜索</td></tr>
         <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>撤销（编辑器内）</td></tr>
@@ -2336,7 +2534,7 @@
 
   function aboutModal() {
     const wrap = document.createElement('div');
-    wrap.innerHTML = `<p style="margin:0 0 8px">NotePlan for Windows v0.3.0</p>
+    wrap.innerHTML = `<p style="margin:0 0 8px">NotePlan for Windows v0.4.0</p>
       <p style="margin:0;color:var(--text-dim);font-size:12.5px">受 <a href="#" id="about-link" style="color:var(--accent)">NotePlan</a> 启发的开源桌面笔记应用。<br/>
       每日笔记 · Markdown · 任务 · 双向链接 · 命令面板<br/>
       数据就是磁盘上的纯文本文件。</p>`;
@@ -2600,12 +2798,7 @@
     // 命令面板按钮
     $('#btn-palette').onclick = () => openPalette();
 
-    // 视图切换
-    document.querySelectorAll('#view-seg button').forEach((b) => {
-      b.onclick = () => setView(b.dataset.view);
-    });
-
-    // 编辑器 / 预览：选中内容右键 → 快速生成待办（无选区时为浏览器默认菜单）
+    // 编辑器：选中内容右键 → 快速生成待办（无选区且在任务行上 → 任务菜单）
     editorWrap.addEventListener('contextmenu', selectionContext);
 
     // 主题按钮
@@ -2617,17 +2810,42 @@
     // 笔记库按钮
     $('#btn-vault-folder').onclick = () => window.api.showInFolder();
 
-    // 右侧面板 Tab
+    // 右侧面板 Tab（日程 / 大纲 / 链接 / 任务）
     document.querySelectorAll('.rb-tab').forEach((tab) => {
       tab.onclick = () => {
         document.querySelectorAll('.rb-tab').forEach((t) => t.classList.toggle('active', t === tab));
         state.rightTab = tab.dataset.tab;
+        $('#rb-agenda').hidden = state.rightTab !== 'agenda';
         $('#rb-outline').hidden = state.rightTab !== 'outline';
         $('#rb-backlinks').hidden = state.rightTab !== 'backlinks';
         $('#rb-tasks').hidden = state.rightTab !== 'tasks';
+        if (state.rightTab === 'agenda') renderAgenda();
         if (state.rightTab === 'tasks') renderTasksPanel();
       };
     });
+
+    // 右栏月历导航
+    $('#rb-cal-prev').onclick = () => {
+      state.calMonth = new Date(state.calMonth.getFullYear(), state.calMonth.getMonth() - 1, 1);
+      renderCalendar(); renderDailyList();
+    };
+    $('#rb-cal-next').onclick = () => {
+      state.calMonth = new Date(state.calMonth.getFullYear(), state.calMonth.getMonth() + 1, 1);
+      renderCalendar(); renderDailyList();
+    };
+    $('#rb-cal-today').onclick = () => {
+      state.calMonth = new Date();
+      state.raSel = todayStr();
+      renderCalendar(); renderDailyList(); renderAgenda();
+    };
+
+    // 周数行 → 打开周计划
+    $('#weekrow').onclick = () => {
+      if (state.current && state.current.isDaily) {
+        state.wpWeekStart = startOfWeek(new Date(state.current.dateStr + 'T12:00:00'));
+      }
+      setMainView('week');
+    };
 
     // 周条
     $('#wb-prev').onclick = () => {
@@ -2732,7 +2950,6 @@
       else if (mod && k === 'k') { e.preventDefault(); paletteOpen() ? closePalette() : openPalette(); }
       else if (mod && k === 'n') { e.preventDefault(); if (!overlayOpen()) newNoteFlow(); }
       else if (mod && k === 'j') { e.preventDefault(); if (!overlayOpen()) openToday(); }
-      else if (mod && k === 'e') { e.preventDefault(); if (!overlayOpen()) cycleView(); }
       else if (mod && k === 'l') { e.preventDefault(); if (!overlayOpen()) toggleTasksAtCursor(); }
       else if (mod && k === 's') { e.preventDefault(); saveNow(true); }
       else if (mod && k === ',') { e.preventDefault(); if (!overlayOpen()) settingsModal(); }
@@ -2777,7 +2994,6 @@
     window.api.onMenu('choose-vault', () => chooseVaultFlow());
     window.api.onMenu('settings', () => settingsModal());
     window.api.onMenu('toggle-task', () => toggleTasksAtCursor());
-    window.api.onMenu('cycle-view', () => cycleView());
     window.api.onMenu('toggle-theme', () => toggleTheme());
     window.api.onMenu('help', () => helpModal());
     window.api.onMenu('about', () => aboutModal());

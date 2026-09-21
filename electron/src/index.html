@@ -40,10 +40,8 @@
           <button id="cal-prev" class="icon-btn" title="上个月">‹</button>
           <span id="cal-title">—</span>
           <button id="cal-next" class="icon-btn" title="下个月">›</button>
-          <button id="cal-today" class="mini-btn" title="回到本月">今天</button>
+          <button id="cal-today" class="mini-btn" title="回到本月">本月</button>
         </div>
-        <div id="cal-grid" class="cal-grid"></div>
-        <div class="sb-section-title">本月笔记</div>
         <div id="daily-list" class="daily-list"></div>
       </div>
 
@@ -81,10 +79,6 @@
             <button data-main="month">月历</button>
             <button data-main="year">年</button>
           </div>
-          <div class="seg" id="view-seg">
-            <button data-view="edit" class="active" title="纯编辑 (Ctrl+E 循环切换)">编辑</button>
-            <button data-view="preview" title="纯预览">预览</button>
-          </div>
           <button id="btn-theme" class="icon-btn" title="切换深色 / 浅色主题 (Ctrl+Shift+L)">
             <svg class="icon-moon" viewBox="0 0 16 16" width="14" height="14"><path fill="currentColor" d="M6.2 1a7.3 7.3 0 1 0 8.6 8.6A6 6 0 0 1 6.2 1"/></svg>
             <svg class="icon-sun" viewBox="0 0 16 16" width="14" height="14"><path fill="currentColor" d="M8 4.5A3.5 3.5 0 1 0 8 11.5 3.5 3.5 0 0 0 8 4.5M8 0a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0V.75A.75.75 0 0 1 8 0m0 12.5a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 8 12.5m8-4.5a.75.75 0 0 1-.75.75h-1.5a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 16 8M2.25 8a.75.75 0 0 1-.75.75H0a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 2.25 8m11.42-5.67a.75.75 0 0 1 0 1.06l-1.06 1.06a.75.75 0 0 1-1.06-1.06l1.06-1.06a.75.75 0 0 1 1.06 0M4.45 11.55a.75.75 0 0 1 0 1.06L3.39 13.67a.75.75 0 0 1-1.06-1.06l1.06-1.06a.75.75 0 0 1 1.06 0m9.22 3.18a.75.75 0 0 1-1.06 0l-1.06-1.06a.75.75 0 0 1 1.06-1.06l1.06 1.06a.75.75 0 0 1 0 1.06M4.45 4.45a.75.75 0 0 1-1.06 0L2.33 3.39a.75.75 0 0 1 1.06-1.06l1.06 1.06a.75.75 0 0 1 0 1.06"/></svg>
@@ -114,7 +108,8 @@
             <span class="lg-dot lg-task"></span>任务时间块
             <span class="lg-dot lg-event"></span>日历事件
             <span class="lg-dot lg-note"></span>有笔记
-            <span class="lg-hol">休</span>法定节假日
+            <span class="lg-dot lg-hol"></span>节假日
+            <span class="lg-dot lg-work"></span>调休上班
           </span>
         </div>
         <div id="calv-body">
@@ -141,11 +136,18 @@
         <div id="wp-grid"></div>
       </div>
 
-      <div id="editor-wrap">
+      <!-- 周数行：每日笔记正文最上方显示所属周 -->
+      <div id="weekrow" hidden title="点击打开本周周计划">
+        <span class="wr-fold">▸</span>
+        <span id="wr-label">WEEK 1</span>
+        <span id="wr-range"></span>
+        <span class="wr-open">打开周计划 →</span>
+      </div>
+
+      <div id="editor-wrap" class="view-edit">
         <textarea id="editor" spellcheck="false"
           placeholder="开始书写……&#10;&#10;支持 Markdown 语法：&#10;- [ ] 任务清单&#10;[[双链]] · #标签 · >2026-09-01 安排日期&#10;==高亮== · **加粗** · *斜体* · `代码`"></textarea>
         <div id="cm-host" hidden></div>
-        <div id="preview" class="markdown-body" hidden></div>
       </div>
 
       <footer id="statusbar">
@@ -154,14 +156,40 @@
       </footer>
     </main>
 
-    <!-- ===================== 右侧面板 ===================== -->
+    <!-- ===================== 右侧面板：月历 + 当日安排 ===================== -->
     <aside id="rightbar">
+      <div id="rb-cal">
+        <div class="rb-cal-head">
+          <span id="rb-cal-title">—</span>
+          <span class="rb-cal-nav">
+            <button id="rb-cal-prev" class="icon-btn" title="上个月">‹</button>
+            <button id="rb-cal-today" class="icon-btn" title="回到本月">•</button>
+            <button id="rb-cal-next" class="icon-btn" title="下个月">›</button>
+          </span>
+        </div>
+        <div id="rb-cal-grid" class="cal-grid rb-grid"></div>
+      </div>
+
       <div class="rb-tabs">
-        <button class="rb-tab active" data-tab="outline">大纲</button>
-        <button class="rb-tab" data-tab="backlinks">反向链接</button>
+        <button class="rb-tab active" data-tab="agenda">日程</button>
+        <button class="rb-tab" data-tab="outline">大纲</button>
+        <button class="rb-tab" data-tab="backlinks">链接</button>
         <button class="rb-tab" data-tab="tasks">任务</button>
       </div>
-      <div id="rb-outline" class="rb-view"></div>
+
+      <div id="rb-agenda" class="rb-view">
+        <div id="ra-head">
+          <span id="ra-date">—</span>
+          <span id="ra-hol" hidden></span>
+        </div>
+        <div id="ra-allday">
+          <div class="ra-allday-label">all-day</div>
+          <div id="ra-allday-list"></div>
+        </div>
+        <div id="ra-timeline"></div>
+      </div>
+
+      <div id="rb-outline" class="rb-view" hidden></div>
       <div id="rb-backlinks" class="rb-view" hidden></div>
       <div id="rb-tasks" class="rb-view" hidden></div>
     </aside>
@@ -208,12 +236,11 @@
   </div>
 
   <div id="toast" hidden></div>
-  <script src="js/app.js"></script>
   <script src="js/shouxing-core.js"></script>
   <script src="js/lunar.js"></script>
   <script src="js/cn-holidays.js"></script>
   <script src="js/errtrap.js"></script>
-  <script src="js/cm-bundle.js?v=8"></script>
+  <script src="js/cm-bundle.js?v=9"></script>
   <script src="js/markdown.js"></script>
   <script src="js/editor.js"></script>
   <script src="js/app.js"></script>

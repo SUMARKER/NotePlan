@@ -1128,7 +1128,6 @@ function buildMenu() {
     {
       label: '视图',
       submenu: [
-        { label: '编辑 / 分栏 / 预览　Ctrl+E', click: () => sendToWindow('menu:cycle-view') },
         { label: '切换深色 / 浅色主题　Ctrl+Shift+L', click: () => sendToWindow('menu:toggle-theme') },
         { type: 'separator' },
         { role: 'resetZoom', label: '重置缩放' },

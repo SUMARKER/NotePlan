@@ -58,7 +58,7 @@
 
     // >2026-09-01 日程安排（注意：此时 > 已被转义为 &gt;；前面允许全角标点）
     s = s.replace(/(^|[\s(（：，、；！？])(?:>|&gt;)(\d{4}-\d{2}-\d{2})\b/g, (_m, pre, date) =>
-      stash(`${pre}<span class="schedule" data-date="${date}" title="跳转到这一天的每日笔记">📅 ${date}</span>`, codes));
+      stash(`${pre}<span class="schedule" data-date="${date}" title="跳转到这一天的每日笔记">&gt;${date}</span>`, codes));
 
     // #标签
     s = s.replace(/(^|[\s(（])#([^\s#.,!?;:，。！？；：()（）\[\]{}'"<>…·、“”]+)/g, (_m, pre, tag) => {
@@ -120,7 +120,8 @@
 
   const RE_HEADING = /^(#{1,6})\s+(.*)$/;
   const RE_LIST_ITEM = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/;
-  const RE_TASK = /^\[([ xX])\]\s*(.*)$/;
+  const RE_TASK = /^\[([ xX-])\]\s*(.*)$/;
+  const RE_LEADING_TIME = /^\d{1,2}:\d{2}\s*(?:[AaPp][Mm])?\s*[-–—~]\s*\d{1,2}:\d{2}\s*(?:[AaPp][Mm])?(?=\s|$)/;
   const RE_HR = /^\s*([-*_])\s*(?:\1\s*){2,}$/;
   const RE_FENCE = /^\s*```\s*(\S*)\s*$/;
   const RE_QUOTE = /^>\s?(.*)$/;
@@ -210,13 +211,20 @@
         const items = [];
         while (i < lines.length && RE_LIST_ITEM.test(lines[i])) {
           const m = lines[i].match(RE_LIST_ITEM);
-          items.push({
+          const item = {
             indent: m[1].replace(/\t/g, '    ').length,
             ordered: /\d/.test(m[2][0]),
             content: m[3],
             line: i + 1,
-          });
+            quotes: [],
+          };
+          items.push(item);
           i++;
+          // 任务下方缩进的引用行（NotePlan 风格备注）归入当前项
+          while (i < lines.length && /^\s+>\s?/.test(lines[i]) && !RE_SCHEDULE_LINE.test(lines[i])) {
+            item.quotes.push({ text: lines[i].replace(/^\s*>\s?/, ''), line: i + 1 });
+            i++;
+          }
           // 吞掉列表项之间的空行（宽松处理）
           while (i < lines.length && !lines[i].trim() &&
                  i + 1 < lines.length && RE_LIST_ITEM.test(lines[i + 1])) i++;
@@ -259,15 +267,24 @@
       const it = items[k];
       const tm = it.content.match(RE_TASK);
       if (tm) {
-        // 已完成：复选框勾选，或带 @done 标记
-        const done = tm[1] !== ' ' || /@done/i.test(tm[2]);
+        // 状态：' ' 待办 / 'x'·'X' 完成（含 @done 标记）/ '-' 废弃
+        const cancelled = tm[1] === '-';
+        const done = !cancelled && (tm[1] !== ' ' || /@done/i.test(tm[2]));
+        // 开头的时间段（如 09:30 - 10:15）弱化为灰色
+        const tpre = tm[2].match(RE_LEADING_TIME);
+        const body = (tpre ? `<span class="task-time">${esc(tpre[0])}</span> ` : '') +
+          inline(tpre ? tm[2].slice(tpre[0].length) : tm[2], ctx);
+        const quotes = (it.quotes || []).map((q) =>
+          `<blockquote><p>${inline(q.text, ctx)}</p></blockquote>`).join('');
         parts.push(
-          `<li class="task${done ? ' done' : ''}" data-line="${it.line}">` +
-          `<input type="checkbox" class="task-box" data-line="${it.line}"${done ? ' checked' : ''}>` +
-          `<span class="task-body">${inline(tm[2], ctx)}</span>`
+          `<li class="task${done ? ' done' : ''}${cancelled ? ' cancel' : ''}" data-line="${it.line}">` +
+          `<input type="checkbox" class="task-box${cancelled ? ' cancel' : ''}" data-line="${it.line}"${done ? ' checked' : ''}>` +
+          `<span class="task-body">${body}</span>${quotes}`
         );
       } else {
-        parts.push(`<li><span class="task-body">${inline(it.content, ctx)}</span>`);
+        const quotes = (it.quotes || []).map((q) =>
+          `<blockquote><p>${inline(q.text, ctx)}</p></blockquote>`).join('');
+        parts.push(`<li><span class="task-body">${inline(it.content, ctx)}</span>${quotes}`);
       }
       k++;
 

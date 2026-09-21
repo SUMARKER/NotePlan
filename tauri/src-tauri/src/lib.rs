@@ -396,7 +396,6 @@ fn build_menu(app: &AppHandle) -> tauri::Result<()> {
         .build()?;
 
     let view_menu = SubmenuBuilder::new(app, "视图")
-        .item(&mk("cycle-view", "编辑 / 分栏 / 预览　Ctrl+E"))
         .item(&mk("toggle-theme", "切换深色 / 浅色主题　Ctrl+Shift+L"))
         .build()?;
 

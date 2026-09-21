@@ -22,7 +22,7 @@ import { foldGutter, foldKeymap, codeFolding, foldService } from '@codemirror/la
 
 /* ---------------- 任务行解析（与 main.js / markdown.js 保持一致） ---------------- */
 
-const RE_TASK_LINE = /^(\s*[-*+]\s+)\[([ xX])\]\s*(.*)$/;
+const RE_TASK_LINE = /^(\s*[-*+]\s+)\[([ xX-])\]\s*(.*)$/;
 const RE_RECURRENCE = /\b(?:every\s+(?:(\d+)\s+)?(day|week|month|year)s?)\b|\b每(?:天|日|周|星期|月|年)\b|\b每\s*(\d+)\s*(?:天|周|星期|月|年)\b/i;
 
 function isRecurring(text) { return RE_RECURRENCE.test(text); }
@@ -43,27 +43,34 @@ function resolveImg(src, noteDir) {
 /* ---------------- Widgets ---------------- */
 
 class TaskWidget extends WidgetType {
-  constructor(checked, recurring, lineNo) {
+  constructor(checked, recurring, lineNo, square, host, cancelled) {
     super();
     this.checked = checked;
     this.recurring = recurring;
     this.lineNo = lineNo;
+    this.square = square;
+    this.host = host;
+    this.cancelled = cancelled;
   }
   eq(other) {
-    return other.checked === this.checked && other.recurring === this.recurring && other.lineNo === this.lineNo;
+    return other.checked === this.checked && other.recurring === this.recurring &&
+      other.lineNo === this.lineNo && other.square === this.square && other.cancelled === this.cancelled;
   }
   toDOM() {
     const wrap = document.createElement('span');
     wrap.className = 'cm-task';
     const box = document.createElement('input');
     box.type = 'checkbox';
-    box.className = 'cm-task-box';
+    // 带日程日期或嵌套缩进的任务用方形复选框；废弃任务显示横杠
+    box.className = 'cm-task-box' + (this.square ? ' cm-task-box-sq' : '') + (this.cancelled ? ' cm-task-box-cancel' : '');
     box.checked = this.checked;
     box.contentEditable = 'false';
     box.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      this.host.onTaskToggle(this.lineNo, !this.checked);
+      // 待办 → 完成；完成/废弃 → 回到待办
+      const toDone = !this.checked && !this.cancelled;
+      this.host.onTaskToggle(this.lineNo, toDone);
     });
     wrap.appendChild(box);
     if (this.recurring) {
@@ -272,11 +279,11 @@ function buildDecorations(state, host) {
         continue;
       }
 
-      // 引用（排除纯日程行）— 行样式保留，"> " 标记隐藏
-      if (/^>\s?/.test(text) && !/^>\s*\d{4}-\d{2}-\d{2}\b/.test(text)) {
+      // 引用（排除纯日程行；允许列表项下缩进的引用）— 行样式保留，"> " 标记隐藏
+      if (/^\s*>\s?/.test(text) && !/^\s*>\s*\d{4}-\d{2}-\d{2}\b/.test(text)) {
         ranges.push({ from: base, to: base, deco: decoLine('cm-md-quote') });
-        const qm = text.match(/^(>\s?)/);
-        if (qm) hideSeg(ln, base, base + qm[1].length);
+        const qm = text.match(/^(\s*)(>\s?)/);
+        if (qm) hideSeg(ln, base + qm[1].length, base + qm[1].length + qm[2].length);
       }
 
       // 水平线
@@ -289,9 +296,11 @@ function buildDecorations(state, host) {
       // 任务行
       const tm = text.match(RE_TASK_LINE);
       if (tm) {
-        const checked = tm[2] !== ' ';
+        const cancelled = tm[2] === '-';
+        const checked = tm[2] !== ' ' && tm[2] !== '-';
         const rest = tm[3];
         const doneByTag = isDoneContent(rest);
+        const square = /(^|\s)>\d{4}-\d{2}-\d{2}\b/.test(rest) || /^\s/.test(text);
         const boxFrom = base + tm[1].length;
         if (selLines.has(ln)) {
           // 光标行显示原始语法
@@ -300,13 +309,22 @@ function buildDecorations(state, host) {
           ranges.push({
             from: boxFrom, to: boxFrom + 3,
             deco: Decoration.replace({
-              widget: new TaskWidget(checked || doneByTag, isRecurring(rest), ln),
+              widget: new TaskWidget(checked || doneByTag, isRecurring(rest), ln, square, host, cancelled),
             }),
           });
         }
         push(base, base + tm[1].length - 1, decoMark('cm-md-mark'));
-        if (checked || doneByTag) {
+        if (cancelled) {
+          ranges.push({ from: base, to: base, deco: decoLine('cm-md-taskcancel') });
+        } else if (checked || doneByTag) {
           ranges.push({ from: base, to: base, deco: decoLine('cm-md-taskdone') });
+        }
+        // 任务行开头的时间段（如 09:30 - 10:15）弱化为灰色
+        const tailWs = text.slice(tm[1].length + 3).match(/^\s*/)[0].length;
+        const tpm = rest.match(/^\d{1,2}:\d{2}\s*(?:[AaPp][Mm])?\s*[-–—~]\s*\d{1,2}:\d{2}\s*(?:[AaPp][Mm])?(?=\s|$)/);
+        if (tpm) {
+          const tStart = base + tm[1].length + 3 + tailWs;
+          push(tStart, tStart + tpm[0].length, decoMark('cm-md-time'));
         }
         // 任务行内的行内语法继续走下面的通用扫描
       } else {

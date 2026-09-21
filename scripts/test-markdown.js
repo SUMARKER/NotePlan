@@ -1,6 +1,6 @@
 'use strict';
 global.window = {};
-require('../src/js/markdown.js');
+require('../tauri/src/js/markdown.js');
 const md = window.NPMarkdown;
 
 const src = [
