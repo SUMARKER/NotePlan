@@ -1352,6 +1352,8 @@
     $('#weekbar').hidden = !notes;
     $('#calview').hidden = notes || week;
     $('#weekplan').hidden = !week;
+    // 右栏（月历+日程）只在「笔记」视图展示，其余视图铺满整个区域
+    $('#rightbar').hidden = !notes;
     if (week) {
       if (!state.wpWeekStart) state.wpWeekStart = startOfWeek(new Date());
       loadTaskIndex().then(() => renderWeekPlan());
@@ -2532,7 +2534,7 @@
 
   function aboutModal() {
     const wrap = document.createElement('div');
-    wrap.innerHTML = `<p style="margin:0 0 8px">NotePlan for Windows v0.4.1</p>
+    wrap.innerHTML = `<p style="margin:0 0 8px">NotePlan for Windows v0.4.2</p>
       <p style="margin:0;color:var(--text-dim);font-size:12.5px">受 <a href="#" id="about-link" style="color:var(--accent)">NotePlan</a> 启发的开源桌面笔记应用。<br/>
       每日笔记 · Markdown · 任务 · 双向链接 · 命令面板<br/>
       数据就是磁盘上的纯文本文件。</p>`;
