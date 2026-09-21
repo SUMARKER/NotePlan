@@ -5,7 +5,7 @@
 核心哲学与 NotePlan 一致：**你的笔记就是磁盘上的纯 Markdown 文件**，随时可以用其它编辑器打开，
 也方便放入 OneDrive / Dropbox / Git 等同步盘。
 
-![界面预览](assets/icon.png)
+![界面预览](electron/assets/icon.png)
 
 ## 功能特性
 
@@ -152,7 +152,7 @@ cargo tauri build   :: 产出 NSIS 安装包
 
 ## 书写语法
 
-```markdown
+````markdown
 # 一级标题
 ## 二级标题
 
@@ -181,7 +181,7 @@ console.log('hello');
 | 单元格 | 单元格 |
 
 ![图片](图片.png)   ← 相对路径会从笔记库内读取（vault:// 协议）
-```
+````
 
 ## 数据格式
 
