@@ -33,6 +33,8 @@ np-host.log
 
 # 本地截图 / 临时产物
 /shot.png
+shot*.png
+/np-electron.log
 
 # cmd / PowerShell 误生成的重定向文件
 /$null
@@ -40,4 +42,3 @@ np-host.log
 # 系统文件
 .DS_Store
 Thumbs.db
-"shot-*.png"  
