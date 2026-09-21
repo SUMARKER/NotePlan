@@ -479,7 +479,8 @@ pub fn open_daily(state: State<AppState>, date_str: String) -> Value {
         if let Some(parent) = abs.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
-        if let Err(e) = std::fs::write(&abs, format!("# {date_str}\n\n")) {
+        // 不再写入默认的 `# 日期` 标题：日期已由界面（面包屑/周数行/右栏）展示
+        if let Err(e) = std::fs::write(&abs, "") {
             return json!({ "ok": false, "error": e.to_string() });
         }
     }

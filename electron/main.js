@@ -493,7 +493,8 @@ function registerIpc() {
     try {
       if (!fs.existsSync(abs)) {
         await fsp.mkdir(path.dirname(abs), { recursive: true });
-        await fsp.writeFile(abs, `# ${dateStr}\n\n`, 'utf8');
+        // 不再写入默认的 `# 日期` 标题：日期已由界面（面包屑/周数行/右栏）展示
+        await fsp.writeFile(abs, '', 'utf8');
       }
       markSelfWrite(abs);
       return { ok: true, rel };
