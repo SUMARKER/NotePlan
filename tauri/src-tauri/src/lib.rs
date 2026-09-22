@@ -454,7 +454,7 @@ pub fn run() {
                 start_watching(&state);
             }
 
-            // 默认窗口尺寸在小屏幕上按显示器收缩，避免窗口超出屏幕；
+            // 默认窗口尺寸在小屏幕上按显示器「工作区」（去掉任务栏）收缩，
             // 位置显式计算且 y ≥ 0（center() 在 set_size 异步生效前会按旧尺寸算出负 y，
             // 导致标题栏顶出屏幕）
             if let Some(win) = app.get_webview_window("main") {
@@ -465,16 +465,18 @@ pub fn run() {
                     .or_else(|| handle.primary_monitor().ok().flatten());
                 if let Some(m) = monitor {
                     let scale = m.scale_factor();
-                    let logical_w = m.size().width as f64 / scale;
-                    let logical_h = m.size().height as f64 / scale;
-                    let mx = m.position().x as f64 / scale;
-                    let my = m.position().y as f64 / scale;
-                    let avail_w = (logical_w - 16.0).max(300.0);
-                    let avail_h = (logical_h - 48.0).max(300.0);
+                    // 工作区 = 整屏 - 任务栏（物理像素，换算为逻辑像素）
+                    let wa = m.work_area();
+                    let logical_w = wa.size.width as f64 / scale;
+                    let logical_h = wa.size.height as f64 / scale;
+                    let mx = wa.position.x as f64 / scale;
+                    let my = wa.position.y as f64 / scale;
+                    let avail_w = logical_w.max(300.0);
+                    let avail_h = logical_h.max(300.0);
                     let w = 1320.0_f64.min(avail_w);
                     let h = 860.0_f64.min(avail_h);
-                    let x = mx + ((logical_w - w) / 2.0).max(0.0);
-                    let y = my + ((logical_h - h) / 2.0).max(0.0);
+                    let x = mx + ((avail_w - w) / 2.0).max(0.0);
+                    let y = my + ((avail_h - h) / 2.0).max(0.0);
                     let _ = win.set_size(tauri::LogicalSize::new(w, h));
                     let _ = win.set_position(tauri::LogicalPosition::new(x, y));
                 } else {
