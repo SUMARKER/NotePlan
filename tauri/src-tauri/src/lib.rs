@@ -454,8 +454,9 @@ pub fn run() {
                 start_watching(&state);
             }
 
-            // 默认窗口尺寸在小屏幕上按显示器收缩，避免窗口超出屏幕
-            // （逻辑像素 = 物理像素 / 缩放比；高度预留任务栏）
+            // 默认窗口尺寸在小屏幕上按显示器收缩，避免窗口超出屏幕；
+            // 位置显式计算且 y ≥ 0（center() 在 set_size 异步生效前会按旧尺寸算出负 y，
+            // 导致标题栏顶出屏幕）
             if let Some(win) = app.get_webview_window("main") {
                 let monitor = win
                     .current_monitor()
@@ -466,11 +467,19 @@ pub fn run() {
                     let scale = m.scale_factor();
                     let logical_w = m.size().width as f64 / scale;
                     let logical_h = m.size().height as f64 / scale;
+                    let mx = m.position().x as f64 / scale;
+                    let my = m.position().y as f64 / scale;
                     let avail_w = (logical_w - 16.0).max(300.0);
                     let avail_h = (logical_h - 48.0).max(300.0);
                     let w = 1320.0_f64.min(avail_w);
                     let h = 860.0_f64.min(avail_h);
+                    let x = mx + ((logical_w - w) / 2.0).max(0.0);
+                    let y = my + ((logical_h - h) / 2.0).max(0.0);
                     let _ = win.set_size(tauri::LogicalSize::new(w, h));
+                    let _ = win.set_position(tauri::LogicalPosition::new(x, y));
+                } else {
+                    // 拿不到显示器信息时退回保守尺寸，保证常见小屏完整显示
+                    let _ = win.set_size(tauri::LogicalSize::new(1100.0, 720.0));
                     let _ = win.center();
                 }
             }

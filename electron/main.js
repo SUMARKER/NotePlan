@@ -1208,6 +1208,7 @@ function createWindow() {
     height,
     minWidth: Math.min(980, width),
     minHeight: Math.min(620, height),
+    center: true,
     show: false,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1b1d23' : '#f7f8fa',
     autoHideMenuBar: false,

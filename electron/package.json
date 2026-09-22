@@ -1,7 +1,7 @@
 {
   "name": "noteplan-windows",
   "productName": "NotePlan for Windows",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "description": "受 NotePlan 启发的 Windows 桌面笔记应用：每日笔记、Markdown、任务、双链、命令面板",
   "main": "main.js",
   "author": "NotePlan for Windows contributors",
