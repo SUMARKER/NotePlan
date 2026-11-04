@@ -1588,6 +1588,45 @@
 
   const weekPlanRel = (year, week) => `Notes/周计划/${year}-W${pad2(week)}.md`;
 
+  /** 把每日笔记正文解析为「当天记录」条目，供周计划日列展示：
+   *  - ## 段名 → 分组标题；任务行（含 [x] / [-]）→ 记录任务；
+   *  - > 引用行 / 普通列表 / 普通文本 → 记录条目；
+   *  - 只取顶级行：缩进的嵌套内容、代码块、空行留在笔记里。line 用于点击定位。 */
+  function parseDailyRecords(text) {
+    const out = [];
+    const lines = String(text || '').split('\n');
+    let fence = false;
+    for (let i = 0; i < lines.length; i++) {
+      const raw = lines[i];
+      const s = raw.trim();
+      if (/^(```|~~~)/.test(s)) { fence = !fence; continue; }
+      if (fence || !s) continue;
+      if (/^\s/.test(raw)) continue; // 嵌套子项是上级记录的细节，不在日列铺开
+      if (/^>\s*\d{4}-\d{2}-\d{2}\s*$/.test(s)) continue; // 纯排期行不是记录
+      if (i === 0 && /^#\s*\d{4}/.test(s)) continue;      // 首行 # 日期标题
+      const line = i + 1;
+      const h = s.match(/^#{1,6}\s+(.+)$/);
+      if (h) { out.push({ kind: 'sec', text: h[1].trim(), line }); continue; }
+      const t = s.match(/^[-*+]\s+\[([ xX-])\]\s*(.*)$/);
+      if (t) {
+        out.push({
+          kind: 'task', line, text: t[2],
+          done: (t[1] !== ' ' && t[1] !== '-') || /@done/i.test(t[2]),
+          cancelled: t[1] === '-',
+          recurring: RE_REC.test(t[2]),
+          scheduled: (t[2].match(/>\s*(\d{4}-\d{2}-\d{2})/) || [])[1] || null,
+        });
+        continue;
+      }
+      const q = s.match(/^>\s?(.*)$/);
+      if (q) { if (q[1].trim()) out.push({ kind: 'quote', text: q[1].trim(), line }); continue; }
+      const li = s.match(/^[-*+]\s+(.+)$/);
+      if (li) { out.push({ kind: 'list', text: li[1].trim(), line }); continue; }
+      out.push({ kind: 'note', text: s, line });
+    }
+    return out;
+  }
+
   function wpClean(text) {
     return (text || '').replace(/^[-*+]\s+\[[ xX]\]\s*/, '')
       .replace(/^\d{1,2}:\d{2}(?:\s*(?:-|–|—|~|至|到)\s*\d{1,2}:\d{2})?\s*/, '')
@@ -1612,6 +1651,12 @@
     loadWeekGoal(info.year, info.week);
 
     const events = await loadCalEvents(first, last);
+    // 每日笔记记录：当天写下的标题 / 任务 / 引用 / 普通行，逐列展示
+    const dailyRels = days.map((d) => `Calendar/${todayStr(d)}.md`);
+    const dailyNotes = await Promise.all(dailyRels.map(async (rel) => {
+      const r = await window.api.readNote(rel);
+      return r.ok ? parseDailyRecords(r.content) : [];
+    }));
     if (state.mainView !== 'week') return; // 异步期间切走
     if (state.calEventsCache.key !== first + '..' + last) return;
 
@@ -1631,6 +1676,7 @@
         if (!seen.has(key)) { seen.add(key); weekTasks.push(t); }
       }
     }
+    const recExtra = { total: 0, done: 0 }; // 每日笔记记录任务（不在排期索引里的部分）
 
     days.forEach((d, di) => {
       const ds = todayStr(d);
@@ -1660,13 +1706,58 @@
         body.appendChild(chip);
       }
 
-      if (!list.length && !evs.length) {
+      // 每日笔记记录：当天笔记里的顶级行（任务 / 引用 / 普通内容），点击定位原文
+      const dailyRel = dailyRels[di];
+      const recShown = new Set(); // 已按记录展示的行号，避免与排期任务重复
+      for (const rec of dailyNotes[di]) {
+        if (rec.kind === 'sec') {
+          const lab = document.createElement('div');
+          lab.className = 'wp-sec';
+          lab.textContent = rec.text;
+          lab.title = `${rec.text}\n${dailyRel} 第 ${rec.line} 行`;
+          lab.addEventListener('click', () => openNote(dailyRel, { line: rec.line }));
+          body.appendChild(lab);
+          continue;
+        }
+        if (rec.kind === 'task') {
+          recShown.add(rec.line);
+          const tm = parseTaskTime(rec.text);
+          const row = document.createElement('div');
+          row.className = 'wp-task' + (rec.done ? ' done' : '') + (rec.cancelled ? ' cancelled' : '');
+          row.innerHTML = `<div class="wp-task-text">${tm && tm.start ? `<span class="wp-task-time">${tm.start}-${tm.end || addHourHM(tm.start)}</span>` : ''}${rec.recurring ? '🔁 ' : ''}${rec.cancelled ? '🚫 ' : ''}${escapeHtml(wpClean(rec.text))}</div>`;
+          row.title = `${dailyRel} 第 ${rec.line} 行${rec.done || rec.cancelled ? '' : '（可拖到其它天改期）'}`;
+          row.addEventListener('click', () => openNote(dailyRel, { line: rec.line }));
+          if (!rec.done && !rec.cancelled) {
+            row.draggable = true;
+            row.addEventListener('dragstart', (ev) => {
+              ev.dataTransfer.setData('text/np-task', JSON.stringify({ rel: dailyRel, line: rec.line }));
+              ev.dataTransfer.effectAllowed = 'move';
+            });
+          }
+          body.appendChild(row);
+          // 完成率统计只算「当天生效」的记录任务（排到别处的不算本周当天）
+          if (!rec.cancelled && (!rec.scheduled || rec.scheduled === ds) && !seen.has(`${dailyRel}#${rec.line}`)) {
+            recExtra.total += 1;
+            if (rec.done) recExtra.done += 1;
+          }
+          continue;
+        }
+        const row = document.createElement('div');
+        row.className = 'wp-note' + (rec.kind === 'quote' ? ' quote' : '');
+        row.textContent = rec.text;
+        row.title = `${rec.text}\n${dailyRel} 第 ${rec.line} 行`;
+        row.addEventListener('click', () => openNote(dailyRel, { line: rec.line }));
+        body.appendChild(row);
+      }
+
+      if (!list.length && !evs.length && !dailyNotes[di].length) {
         const empty = document.createElement('div');
         empty.className = 'wp-empty';
         empty.textContent = '没有安排';
         body.appendChild(empty);
       }
       for (const t of list) {
+        if (t.rel === dailyRel && recShown.has(t.line)) continue; // 已按当天记录展示
         const tm = parseTaskTime(t.text);
         const row = document.createElement('div');
         row.className = 'wp-task' + (t.done ? ' done' : '');
@@ -1724,12 +1815,12 @@
       grid.appendChild(cell);
     });
 
-    const total = weekTasks.length;
-    const done = weekTasks.filter((t) => t.done).length;
+    const total = weekTasks.length + recExtra.total;
+    const done = weekTasks.filter((t) => t.done).length + recExtra.done;
     const pct = total ? Math.round(done / total * 100) : 0;
     $('#wp-stats').innerHTML = total
-      ? `本周任务 <b>${total}</b> · 完成 <b>${done}</b> · 完成率 <b>${pct}%</b>`
-      : '本周还没有排期任务，从右侧任务面板拖入，或在上方目标卡片添加';
+      ? `本周任务与记录 <b>${total}</b> · 完成 <b>${done}</b> · 完成率 <b>${pct}%</b>`
+      : '本周还没有排期任务或每日记录，从右侧任务面板拖入，或在上方目标卡片添加';
   }
 
   /* ---- 周目标：读写 Notes/周计划/YYYY-Wnn.md 的「本周目标」段 ---- */
@@ -2726,6 +2817,7 @@
           顶部在 笔记 / 周计划 / 月历 / 年 之间切换主视图；<br/>
           右栏「月历 + 当日日程」仅在 笔记 视图展示，其余视图自动隐藏铺满；<br/>
           每日笔记正文顶部显示所属周（WEEK nn），点击打开本周周计划；<br/>
+          周计划：一周七列，除排期任务与日历事件外，还展示每天笔记里记录的内容（任务 / 引用 / 普通内容，点击定位原文）；<br/>
           右栏日程：点击月历日期切换当天安排，双击打开当日笔记；<br/>
           all-day 列出当天无时间任务（可直接勾选），时间段任务定位到下方时间轴。
         </div>`, true) +
@@ -2788,7 +2880,7 @@
 
   function aboutModal() {
     const wrap = document.createElement('div');
-    wrap.innerHTML = `<p style="margin:0 0 8px">NotePlan for Windows v0.5.8</p>
+    wrap.innerHTML = `<p style="margin:0 0 8px">NotePlan for Windows v0.6.0</p>
       <p style="margin:0;color:var(--text-dim);font-size:12.5px">受 <a href="#" id="about-link" style="color:var(--accent)">NotePlan</a> 启发的开源桌面笔记应用。<br/>
       每日笔记 · Markdown · 任务 · 双向链接 · 命令面板<br/>
       数据就是磁盘上的纯文本文件。</p>
